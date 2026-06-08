@@ -9,6 +9,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from config import OUT_FIGS
 
 
@@ -60,7 +65,7 @@ def plot_model_comparison(results_list: list, metric: str = "MAE", path=None):
     ----------
     results_list : list of dicts returned by evaluate()
     metric       : one of 'MAE', 'RMSE', 'R2', 'Spearman_rho',
-                    'Top1_acc', 'Top3_acc'
+                   'Top1_acc', 'Top3_acc'
     """
     if path is None:
         path = OUT_FIGS / f"comparison_{metric.lower()}.pdf"

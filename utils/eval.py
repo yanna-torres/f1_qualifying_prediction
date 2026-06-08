@@ -10,6 +10,11 @@ import pandas as pd
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from scipy.stats import spearmanr
 
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from config import TARGET_COL, META_COLS, OUT_PREDS, OUT_RESULTS
 
 
