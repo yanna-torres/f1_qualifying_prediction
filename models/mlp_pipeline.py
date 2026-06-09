@@ -91,7 +91,9 @@ def main():
 
     results = evaluate(MODEL_NAME, y_test, y_pred, label="2024 season (held-out)")
 
-    save_model(model, MODEL_NAME)
+    save_model(
+        model, MODEL_NAME, best_params=search.best_params_, cv_mae=-search.best_score_
+    )
 
     plot_pred_vs_actual(MODEL_NAME, y_test, y_pred)
     plot_residuals(MODEL_NAME, y_test, y_pred)
