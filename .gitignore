@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# FastF1 cache directory
+__fastf1_cache__/
+**/f1_cache/
+checkpoint.json
+checkpoint_*.json
