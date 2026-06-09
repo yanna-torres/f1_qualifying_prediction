@@ -9,10 +9,14 @@ from pathlib import Path
 
 # ── Paths ─────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent
-DATA_PATH = ROOT / "data" / "f1_v3_predictive.csv"
-OUT_PREDS = ROOT / "outputs" / "predictions"
-OUT_FIGS = ROOT / "outputs" / "figures"
-OUT_RESULTS = ROOT / "outputs" / "results_table.csv"
+DATA_DIR = ROOT / "data"
+DATA_PATH = DATA_DIR / "f1_v3_predictive.csv"
+FASTF1_WITH_FP_DIR = DATA_DIR / "fastF1" / "with_fp"
+FASTF1_WITHOUT_FP_DIR = DATA_DIR / "fastF1" / "without_fp"
+OUTPUT_DIR = ROOT / "outputs"
+OUT_PREDS = OUTPUT_DIR / "predictions"
+OUT_FIGS = OUTPUT_DIR / "figures"
+OUT_RESULTS = OUTPUT_DIR / "results_table.csv"
 
 # Create output directories if they do not exist
 OUT_PREDS.mkdir(parents=True, exist_ok=True)

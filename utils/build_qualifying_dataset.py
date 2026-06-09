@@ -45,8 +45,13 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-# SEASONS = [2022, 2023, 2024, 2025]
-SEASONS = [2025]
+SEASONS = [
+    2022,
+    2023,
+    2024,
+    2025,
+]  # It may exceed the rate limit to run all seasons at once. If it does, fetch season by season by setting SEASONS = [2022], then [2023], etc.
+# SEASONS = [2025]
 CACHE_DIR = "./f1_cache"
 OUTPUT_BASE = "data/qualifying_dataset_2025.csv"
 OUTPUT_FP = "data/qualifying_dataset_with_fp_2025.csv"
