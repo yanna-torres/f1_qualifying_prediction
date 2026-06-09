@@ -47,7 +47,7 @@ args = parser.parse_args()
 # ---------------------------------------------------------------------------
 suffix = "_with_fp" if args.with_fp else ""
 in_file = DATA_DIR / f"qualifying_dataset_merged{suffix}.csv"
-out_file = DATA_DIR / f"qualifying_dataset_wide_{suffix}.csv"
+out_file = DATA_DIR / f"qualifying_dataset_wide{suffix}.csv"
 
 df = pd.read_csv(in_file)
 print(f"Loaded  : {in_file}  ({len(df):,} rows)")
