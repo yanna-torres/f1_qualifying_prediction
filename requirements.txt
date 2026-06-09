@@ -4,3 +4,4 @@ scikit-learn
 matplotlib
 scipy
 fastf1
+seaborn
