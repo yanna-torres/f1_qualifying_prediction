@@ -2,15 +2,15 @@
 merge_and_clean.py
 ------------------
 Merges the four qualifying datasets (2022-2025) and normalises:
-  - Team names  : AlphaTauri / RB / Racing Bulls  -> Racing Bulls
-                  Alfa Romeo / Kick Sauber         -> Kick Sauber
-  - Circuit names: strips the "FORMULA 1 <SPONSOR>" prefix
-                  and the trailing four-digit year.
+    - Team names  : AlphaTauri / RB / Racing Bulls  -> Racing Bulls
+                    Alfa Romeo / Kick Sauber         -> Kick Sauber
+    - Circuit names: strips the "FORMULA 1 <SPONSOR>" prefix
+                    and the trailing four-digit year.
 
 Usage
 -----
-  python merge_and_clean.py --fp          # datasets that include FP data
-  python merge_and_clean.py --no-fp       # datasets without FP data
+    python merge_and_clean.py --fp          # datasets that include FP data
+    python merge_and_clean.py --no-fp       # datasets without FP data
 """
 
 import argparse
