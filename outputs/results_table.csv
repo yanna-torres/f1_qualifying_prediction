@@ -1,0 +1,2 @@
+Model,MAE,RMSE,R2,Spearman_rho,Top1_acc_%,Top3_acc_%
+MLP,2.1519,2.9508,0.7372,0.8805,45.7,85.0
