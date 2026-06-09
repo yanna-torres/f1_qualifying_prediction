@@ -16,14 +16,14 @@ sys.path.insert(0, str(Path(__file__).parent / "models"))
 from utils import save_results_table, plot_model_comparison
 
 # Uncomment as you implement each model:
-# import mlp_pipeline
+from models import mlp_pipeline
 # import lr_pipeline
 # import svr_pipeline
 # import gb_pipeline
 # import gpr_pipeline
 
 PIPELINES = [
-    # mlp_pipeline,
+    mlp_pipeline,
     # lr_pipeline,
     # svr_pipeline,
     # gb_pipeline,
