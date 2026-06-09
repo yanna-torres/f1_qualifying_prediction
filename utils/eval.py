@@ -9,13 +9,28 @@ import pandas as pd
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from scipy.stats import spearmanr
+import joblib
 
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import TARGET_COL, META_COLS, OUT_PREDS, OUT_RESULTS
+from config import ROOT, TARGET_COL, META_COLS, OUT_PREDS, OUT_RESULTS
+
+MODELS_DIR = ROOT / "outputs" / "models"
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def save_model(model, model_name: str):
+    path = MODELS_DIR / f"{model_name.lower()}_model.pkl"
+    joblib.dump(model, path)
+    print(f"  Model saved → {path}")
+
+
+def load_model(model_name: str):
+    path = MODELS_DIR / f"{model_name.lower()}_model.pkl"
+    return joblib.load(path)
 
 
 def evaluate(
