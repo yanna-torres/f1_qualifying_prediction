@@ -11,6 +11,8 @@ from pathlib import Path
 ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
 DATA_PATH = DATA_DIR / "f1_v3_predictive.csv"
+DATA_PATH_WITH_FP = DATA_DIR / "qualifying_dataset_merged_with_fp.csv"
+DATA_PATH_WITHOUT_FP = DATA_DIR / "qualifying_dataset_merged.csv"
 FASTF1_WITH_FP_DIR = DATA_DIR / "fastF1" / "with_fp"
 FASTF1_WITHOUT_FP_DIR = DATA_DIR / "fastF1" / "without_fp"
 OUTPUT_DIR = ROOT / "outputs"
