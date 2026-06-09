@@ -20,7 +20,8 @@ Developed as part of a graduate-level machine learning course paper.
 
 ## Repository structure
 
-```f1_qualifying_prediction/
+```
+f1_qualifying_prediction/
 │
 ├── config.py
 ├── run_all.py
