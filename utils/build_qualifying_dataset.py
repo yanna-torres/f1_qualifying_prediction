@@ -46,11 +46,11 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 # SEASONS = [2022, 2023, 2024, 2025]
-SEASONS = [2024]
+SEASONS = [2025]
 CACHE_DIR = "./f1_cache"
-OUTPUT_BASE = "data/qualifying_dataset_2024.csv"
-OUTPUT_FP = "data/qualifying_dataset_with_fp_2024.csv"
-CHECKPOINT_FILE = "data/checkpoint_2024.json"
+OUTPUT_BASE = "data/qualifying_dataset_2025.csv"
+OUTPUT_FP = "data/qualifying_dataset_with_fp_2025.csv"
+CHECKPOINT_FILE = "data/checkpoint_2025.json"
 
 # Seconds to wait between each session.load() call.
 # 4 sessions per round (Q + FP1 + FP2 + FP3) × ~24 rounds × 4 seasons

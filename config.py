@@ -21,8 +21,8 @@ OUT_FIGS.mkdir(parents=True, exist_ok=True)
 # ── Experiment settings ───────────────────────────────────────────
 TARGET_COL = "quali_position"
 SEASON_COL = "year"
-TRAIN_SEASONS = [2022, 2023]
-TEST_SEASONS = [2024]
+TRAIN_SEASONS = [2022, 2023, 2024]
+TEST_SEASONS = [2025]
 RANDOM_STATE = 42
 CV_FOLDS = 5
 
