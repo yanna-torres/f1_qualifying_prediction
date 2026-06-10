@@ -1,67 +1,124 @@
 """
 data.py
 =============
-Data loading, preprocessing, and train/test splitting.
+Preprocessing, feature engineering (Label Encoding), and train/test split 
+for the F1 qualifying dataset, using centralized configurations.
 """
 
 import numpy as np
 import pandas as pd
+import os
+from sklearn.preprocessing import LabelEncoder
 
 import sys
 from pathlib import Path
 
+# Injeta a raiz do projeto no path para importar o config
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config import (
-    DATA_PATH,
+    DATA_PATH_WIDE_WITH_FP,
+    OUT_TRAIN,
+    OUT_TEST,
     TARGET_COL,
     SEASON_COL,
     TRAIN_SEASONS,
     TEST_SEASONS,
     DROP_COLS,
+    ENCODE_COLS,
+    COMPOUND_COLS
 )
 
-
-def load_and_split(path=DATA_PATH):
+def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
     """
-    Load the dataset, restrict to the ground-effect regulatory era
-    (TRAIN_SEASONS + TEST_SEASONS), and return train/test arrays.
-
-    Returns
-    -------
-    X_train, y_train : np.ndarray  training features and target
-    X_test,  y_test  : np.ndarray  test features and target
-    feature_cols     : list[str]   names of retained feature columns
-    test_df          : pd.DataFrame original test rows (for enrichment)
+    Loads the dataset, restricts seasons, applies Label Encoding, 
+    converts booleans, handles missing values with train medians, 
+    removes drop columns, and saves the split CSVs.
     """
-    df = pd.read_csv(path)
+    print(f"Loading dataset from: {input_path}")
+    df = pd.read_csv(input_path)
+    df.columns = df.columns.str.strip()
+    df = df.rename(columns={"Year": "year", "YEAR": "year"})
+
+    # Restrict to configured seasons and drop NaNs in the Target Column
     df = df[df[SEASON_COL].isin(TRAIN_SEASONS + TEST_SEASONS)].copy()
-    df = df.dropna(subset=[TARGET_COL])
+    if TARGET_COL in df.columns:
+        df = df.dropna(subset=[TARGET_COL])
 
-    feature_cols = [c for c in df.columns if c not in DROP_COLS]
+    # Apply Label Encoder to standard categorical columns
+    le = LabelEncoder()
+    for col in ENCODE_COLS:
+        if col in df.columns:
+            df[col] = df[col].astype(str)
+            df[col] = le.fit_transform(df[col])
+            print(f"  [Encoder] Column '{col}' transformed into numeric values.")
 
-    # Convert boolean columns to integer flags
-    for col in feature_cols:
-        if df[col].dtype == bool:
-            df[col] = df[col].astype(int)
+    # Apply shared Label Encoder to Compound columns
+    existing_compounds = [c for c in COMPOUND_COLS if c in df.columns]
+    if existing_compounds:
+        # Flatten all compound values to create a single consistent vocabulary
+        all_compounds = pd.concat([df[c].astype(str) for c in existing_compounds]).unique()
+        compound_le = LabelEncoder()
+        compound_le.fit(all_compounds)
+        
+        for col in existing_compounds:
+            df[col] = df[col].astype(str)
+            df[col] = compound_le.transform(df[col])
+            print(f"  [Encoder] Column '{col}' transformed with shared compound mapping.")
 
-    # Fill remaining NaN with column median
-    df[feature_cols] = df[feature_cols].fillna(
-        df[feature_cols].median(numeric_only=True)
-    )
+    # Convert boolean columns to integers (1 and 0)
+    pure_bools = df.select_dtypes(include=['bool']).columns
+    if len(pure_bools) > 0:
+        df[pure_bools] = df[pure_bools].astype(int)
+        print(f"  [Booleans] {len(pure_bools)} pure boolean columns converted to integers.")
 
+    replace_map = {True: 1, False: 0, 'True': 1, 'False': 0}
+    
+    for col in df.columns:
+        if df[col].dtype == 'object':
+            # Checks if the column actually contains the word True or False.
+            if df[col].isin([True, False, 'True', 'False']).any():
+                df[col] = df[col].replace(replace_map)
+                
+                # Convert to numeric (float) so that median imputation can fill in the NaNs afterwards.
+                df[col] = pd.to_numeric(df[col], errors='ignore')
+                print(f"  [Booleans] Mixed boolean column '{col}' converted to numeric (1/0/NaN).")
+
+    # Split into Train and Test sets based on config
     train_mask = df[SEASON_COL].isin(TRAIN_SEASONS)
     test_mask = df[SEASON_COL].isin(TEST_SEASONS)
 
-    X_train = df.loc[train_mask, feature_cols].values.astype(float)
-    y_train = df.loc[train_mask, TARGET_COL].values.astype(float)
-    X_test = df.loc[test_mask, feature_cols].values.astype(float)
-    y_test = df.loc[test_mask, TARGET_COL].values.astype(float)
+    # Drop configured columns before splitting
+    feature_cols = [c for c in df.columns if c not in DROP_COLS]
+    df = df[feature_cols]
 
-    test_df = df[test_mask].reset_index(drop=True)
+    train_df = df[train_mask].copy()
+    test_df = df[test_mask].copy()
+    
+    print(f"\nData Split:")
+    print(f"  Train {TRAIN_SEASONS}: {len(train_df)} rows")
+    print(f"  Test  {TEST_SEASONS}: {len(test_df)} rows")
 
-    print(f"  Features : {len(feature_cols)}")
-    print(f"  Train    : {len(X_train)} samples  {TRAIN_SEASONS}")
-    print(f"  Test     : {len(X_test)}  samples  {TEST_SEASONS}")
+    # Replace NaN values with medians (Strictly avoiding Data Leakage)
+    numeric_cols = train_df.select_dtypes(include=[np.number]).columns
+    
+    # Calculate the median using only past knowledge (Train)
+    train_medians = train_df[numeric_cols].median()
+    
+    # Apply this same median to both train and test sets
+    train_df[numeric_cols] = train_df[numeric_cols].fillna(train_medians)
+    test_df[numeric_cols] = test_df[numeric_cols].fillna(train_medians)
+    print("  [Imputation] NaN values filled with the train set median.")
 
-    return X_train, y_train, X_test, y_test, feature_cols, test_df
+    # Save the CSV files separately using config paths
+    os.makedirs(OUT_TRAIN.parent, exist_ok=True)
+    
+    train_df.to_csv(OUT_TRAIN, index=False)
+    test_df.to_csv(OUT_TEST, index=False)
+    
+    print(f"\nFiles saved successfully:")
+    print(f"  - {OUT_TRAIN}")
+    print(f"  - {OUT_TEST}")
+
+if __name__ == "__main__":
+    preprocess_and_split()
