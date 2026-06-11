@@ -45,26 +45,7 @@ CV_FOLDS = 5
 # ── Feature exclusions ────────────────────────────────────────────
 # Columns excluded from the feature matrix for all models.
 DROP_COLS = [
-    "raceId",
-    "driverId",
-    "constructorId",
-    "circuitId",
-    "location",
-    "country",
-    "nationality_driver",
-    "nationality_constructor",
-    "weather_label",
-    # raw session splits already summarised by best_quali_time & gap_to_pole_pct
-    "q1_seconds",
-    "q2_seconds",
-    "q3_seconds",
-    # race grid may reflect post-qualifying penalties
-    "grid",
-    # race finish position → target leakage
-    "positionOrder",
-    TARGET_COL,
-    SEASON_COL,
-    "round",
+    
 ]
 
 # Metadata columns attached to enriched prediction outputs
