@@ -37,13 +37,13 @@ def evaluate(
     top1 = np.mean(np.abs(y_test - np.round(y_pred)) <= 1)
     top3 = np.mean(np.abs(y_test - np.round(y_pred)) <= 3)
 
-    print(f"\n── {model_name}  |  {label} ─────────────────────────────────")
+    print(f"\n-- {model_name}  |  {label} " + "-" * 33)
     print(f"  MAE        : {mae:.4f}  grid positions")
     print(f"  RMSE       : {rmse:.4f} grid positions")
-    print(f"  R²         : {r2:.4f}")
-    print(f"  Spearman ρ : {rho:.4f}  (p = {pval:.4e})")
-    print(f"  Top-1 acc. : {top1 * 100:.1f}%  (within ±1 rank)")
-    print(f"  Top-3 acc. : {top3 * 100:.1f}%  (within ±3 ranks)")
+    print(f"  R2         : {r2:.4f}")
+    print(f"  Spearman r : {rho:.4f}  (p = {pval:.4e})")
+    print(f"  Top-1 acc. : {top1 * 100:.1f}%  (within +-1 rank)")
+    print(f"  Top-3 acc. : {top3 * 100:.1f}%  (within +-3 ranks)")
 
     return {
         "model": model_name,
@@ -78,7 +78,7 @@ def save_results_table(results_list: list, path=OUT_RESULTS):
         )
     table = pd.DataFrame(rows).set_index("Model")
     table.to_csv(path)
-    print(f"\n  Results table saved → {path}")
+    print(f"\n  Results table saved -> {path}")
     print(table.to_string())
     return table
 
@@ -105,5 +105,5 @@ def save_enriched_predictions(
     out["residual"] = y_test - y_pred
 
     out.to_csv(path, index=False)
-    print(f"  Predictions saved → {path}")
+    print(f"  Predictions saved -> {path}")
     return out

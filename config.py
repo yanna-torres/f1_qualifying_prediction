@@ -35,7 +35,7 @@ OUT_PREDS.mkdir(parents=True, exist_ok=True)
 OUT_FIGS.mkdir(parents=True, exist_ok=True)
 
 # ── Experiment settings ───────────────────────────────────────────
-TARGET_COL = "quali_position"
+TARGET_COL = "GridPosition"
 SEASON_COL = "year"
 TRAIN_SEASONS = [2022, 2023, 2024]
 TEST_SEASONS = [2025]
@@ -50,11 +50,9 @@ DROP_COLS = [
 
 # Metadata columns attached to enriched prediction outputs
 META_COLS = [
-    "raceId",
     "year",
-    "round",
-    "location",
-    "country",
-    "driverId",
-    "constructorId",
+    "Round",
+    "Circuit",
+    "Driver",
+    "Team",
 ]

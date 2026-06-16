@@ -120,5 +120,37 @@ def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
     print(f"  - {OUT_TRAIN}")
     print(f"  - {OUT_TEST}")
 
+def load_and_split():
+    """
+    Load preprocessed train/test CSVs and return feature matrices,
+    target vectors, and full DataFrames for metadata attachment.
+
+    Runs preprocess_and_split() automatically if the files are missing.
+
+    Returns
+    -------
+    X_train, X_test : pd.DataFrame
+    y_train, y_test : np.ndarray
+    train_df, test_df : pd.DataFrame  (full rows, for metadata attachment)
+    """
+    if not OUT_TRAIN.exists() or not OUT_TEST.exists():
+        print("Preprocessed files not found — running preprocess_and_split().")
+        preprocess_and_split()
+
+    train_df = pd.read_csv(OUT_TRAIN)
+    test_df = pd.read_csv(OUT_TEST)
+
+    exclude = set([TARGET_COL] + DROP_COLS)
+    feature_cols = [c for c in train_df.columns if c not in exclude]
+
+    X_train = train_df[feature_cols]
+    X_test = test_df[feature_cols]
+    y_train = train_df[TARGET_COL].to_numpy()
+    y_test = test_df[TARGET_COL].to_numpy()
+
+    print(f"Loaded  train: {X_train.shape}  |  test: {X_test.shape}")
+    return X_train, X_test, y_train, y_test, train_df, test_df
+
+
 if __name__ == "__main__":
     preprocess_and_split()
