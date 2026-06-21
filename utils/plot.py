@@ -35,7 +35,7 @@ def plot_pred_vs_actual(
     ax.legend(fontsize=9)
     plt.tight_layout()
     fig.savefig(path, bbox_inches="tight")
-    print(f"  Saved → {path}")
+    print(f"  Saved -> {path}")
     plt.close()
 
 
@@ -53,7 +53,7 @@ def plot_residuals(model_name: str, y_test: np.ndarray, y_pred: np.ndarray, path
     ax.set_title(f"{model_name}: Residual Plot")
     plt.tight_layout()
     fig.savefig(path, bbox_inches="tight")
-    print(f"  Saved → {path}")
+    print(f"  Saved -> {path}")
     plt.close()
 
 
@@ -87,7 +87,7 @@ def plot_model_comparison(results_list: list, metric: str = "MAE", path=None):
     ax.invert_yaxis()
     plt.tight_layout()
     fig.savefig(path, bbox_inches="tight")
-    print(f"  Saved → {path}")
+    print(f"  Saved -> {path}")
     plt.close()
 
 
@@ -115,5 +115,5 @@ def plot_search_results(model_name: str, search, path=None):
     ax.legend(fontsize=9)
     plt.tight_layout()
     fig.savefig(path, bbox_inches="tight")
-    print(f"  Saved → {path}")
+    print(f"  Saved -> {path}")
     plt.close()

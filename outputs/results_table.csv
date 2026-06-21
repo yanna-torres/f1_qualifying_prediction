@@ -1,0 +1,2 @@
+Model,MAE,RMSE,R2,Spearman_rho,Top1_acc_%,Top3_acc_%
+LinearRegression,1.7929,2.2053,0.8516,0.8917,47.1,89.5

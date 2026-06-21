@@ -50,11 +50,9 @@ DROP_COLS = [
 
 # Metadata columns attached to enriched prediction outputs
 META_COLS = [
-    "raceId",
     "year",
-    "round",
-    "location",
-    "country",
-    "driverId",
-    "constructorId",
+    "Round",
+    "Circuit",
+    "Driver",
+    "Team",
 ]
