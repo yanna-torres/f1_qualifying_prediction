@@ -1,0 +1,10 @@
+{
+  "model": "SVR_no_circuit_metadata",
+  "best_params": {
+    "svr__C": "5.019072833961315",
+    "svr__epsilon": "0.004205571187007209",
+    "svr__gamma": "0.018655260217376828",
+    "svr__kernel": "rbf"
+  },
+  "cv_mae": 3.724
+}
