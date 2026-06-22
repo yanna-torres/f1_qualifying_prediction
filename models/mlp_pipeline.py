@@ -1,6 +1,6 @@
 """
-models/mlp_f1_pipeline.py
-=========================
+models/mlp_pipeline.py
+=======================
 MLP regression model for F1 qualifying grid position prediction.
 """
 
@@ -84,7 +84,7 @@ def tune(X_train, y_train):
 def main():
     print(f"\n{'=' * 55}\n  {MODEL_NAME} pipeline\n{'=' * 55}")
 
-    X_train, y_train, X_test, y_test, _, test_df = load_and_split()
+    X_train, X_test, y_train, y_test, _, test_df = load_and_split()
 
     model, search = tune(X_train, y_train)
     y_pred = model.predict(X_test)
