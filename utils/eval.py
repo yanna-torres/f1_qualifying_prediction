@@ -91,6 +91,12 @@ def save_results_table(results_list: list, path=OUT_RESULTS):
     """
     Aggregate a list of result dicts (one per model) into a comparison
     table and save to CSV.
+
+    If a results table already exists at `path`, rows for the models
+    just run are updated in place; rows for any other model already
+    present in the file are preserved. This allows running a single
+    model (e.g. via run_all.py --mlp) without erasing results from
+    previously run models.
     """
     rows = []
     for r in results_list:
@@ -105,11 +111,20 @@ def save_results_table(results_list: list, path=OUT_RESULTS):
                 "Top3_acc_%": round(r["Top3_acc"] * 100, 1),
             }
         )
-    table = pd.DataFrame(rows).set_index("Model")
-    table.to_csv(path)
+    new_table = pd.DataFrame(rows).set_index("Model")
+
+    if Path(path).exists():
+        existing = pd.read_csv(path, index_col="Model")
+        combined = pd.concat([existing, new_table])
+        combined = combined[~combined.index.duplicated(keep="last")]
+        combined = combined.sort_index()
+    else:
+        combined = new_table
+
+    combined.to_csv(path)
     print(f"\n  Results table saved -> {path}")
-    print(table.to_string())
-    return table
+    print(combined.to_string())
+    return combined
 
 
 def save_enriched_predictions(

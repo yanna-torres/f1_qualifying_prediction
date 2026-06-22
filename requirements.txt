@@ -6,3 +6,4 @@ scipy
 fastf1
 seaborn
 joblib
+lightgbm
