@@ -9,13 +9,42 @@ import pandas as pd
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from scipy.stats import spearmanr
+import joblib
+import json
 
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from config import TARGET_COL, META_COLS, OUT_PREDS, OUT_RESULTS
+from config import ROOT, TARGET_COL, META_COLS, OUT_PREDS, OUT_RESULTS
+
+MODELS_DIR = ROOT / "outputs" / "models"
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def save_model(model, model_name: str, best_params: dict = None, cv_mae: float = None):
+    # Save model
+    path = MODELS_DIR / f"{model_name.lower()}_model.pkl"
+    joblib.dump(model, path)
+    print(f"  Model saved → {path}")
+
+    # Save hyperparameters and CV score as JSON
+    if best_params is not None:
+        meta = {
+            "model": model_name,
+            "best_params": {k: str(v) for k, v in best_params.items()},
+            "cv_mae": round(cv_mae, 4) if cv_mae is not None else None,
+        }
+        meta_path = MODELS_DIR / f"{model_name.lower()}_params.json"
+        with open(meta_path, "w") as f:
+            json.dump(meta, f, indent=2)
+        print(f"  Params saved → {meta_path}")
+
+
+def load_model(model_name: str):
+    path = MODELS_DIR / f"{model_name.lower()}_model.pkl"
+    return joblib.load(path)
 
 
 def evaluate(
