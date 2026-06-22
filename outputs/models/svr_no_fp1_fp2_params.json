@@ -1,0 +1,10 @@
+{
+  "model": "SVR_no_fp1_fp2",
+  "best_params": {
+    "svr__C": "3.14891164795686",
+    "svr__epsilon": "0.711447600934342",
+    "svr__gamma": "0.08471801418819976",
+    "svr__kernel": "rbf"
+  },
+  "cv_mae": 4.1192
+}

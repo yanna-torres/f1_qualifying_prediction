@@ -1,0 +1,9 @@
+{
+  "model": "MLP_no_fp1",
+  "best_params": {
+    "mlp__alpha": "2.621087878265438e-05",
+    "mlp__hidden_layer_sizes": "(256, 128)",
+    "mlp__learning_rate_init": "0.008861577452533072"
+  },
+  "cv_mae": 3.5518
+}
