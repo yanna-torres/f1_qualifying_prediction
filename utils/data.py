@@ -28,6 +28,7 @@ from config import (
     ENCODE_COLS,
     COMPOUND_COLS,
 )
+from utils.circuit_metadata import get_circuit_metadata_df
 
 
 def apply_feature_engineering(df):
@@ -81,6 +82,43 @@ def purge_data_leakage(df):
     return df
 
 
+def apply_circuit_metadata(df):
+    """
+    Merges circuit-level metadata (layout, speed character, track
+    length, corner count, elevation change) onto the dataset, keyed
+    by the raw 'Circuit' string column.
+
+    Must run BEFORE Label Encoding is applied to 'Circuit', since the
+    merge relies on matching the original circuit name strings against
+    circuit_metadata.CIRCUIT_METADATA.
+
+    The new categorical columns (circuit_layout, circuit_speed,
+    circuit_character) are added to ENCODE_COLS dynamically here so
+    they go through the same Label Encoder treatment as Driver/Team/
+    Circuit later in preprocess_and_split().
+    """
+    print("\n  [Circuit Metadata] Merging circuit layout/speed/character features...")
+
+    metadata_df = get_circuit_metadata_df()
+    before_cols = set(df.columns)
+
+    df = df.merge(metadata_df, on="Circuit", how="left")
+
+    new_cols = [c for c in df.columns if c not in before_cols]
+    missing = df[new_cols].isnull().any(axis=1).sum()
+
+    print(f"    -> Added columns: {new_cols}")
+    if missing > 0:
+        print(
+            f"    [WARNING] {missing} rows have no circuit metadata match "
+            f"(unrecognised Circuit name). These rows will get NaN here "
+            f"and be median/mode-imputed later, which is NOT ideal for "
+            f"categorical columns -- check circuit_metadata.py for missing entries."
+        )
+
+    return df
+
+
 def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
     """
     Loads the dataset, applies anti-leakage rules, generates deltas,
@@ -104,14 +142,24 @@ def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
     # 1. PURGA DE DATA LEAKAGE (Deve ocorrer antes do Label Encoding)
     df = purge_data_leakage(df)
 
-    # 2. FEATURE ENGINEERING (DELTAS)
+    # 2. CIRCUIT METADATA
+    df = apply_circuit_metadata(df)
+
+    # 3. FEATURE ENGINEERING (DELTAS)
     df = apply_feature_engineering(df)
     # ------------------------------------
 
-    # Apply Label Encoder to standard categorical columns
+    # Apply Label Encoder to standard categorical columns.
+    # New circuit-metadata categorical columns (circuit_layout,
+    # circuit_speed, circuit_character) are added here so they go
+    # through the same encoding as Driver/Team/Circuit, without
+    # mutating the imported ENCODE_COLS constant.
+    CIRCUIT_CATEGORICAL_COLS = ["circuit_layout", "circuit_speed", "circuit_character"]
     le = LabelEncoder()
     # Filter to ensure we only try to encode columns that survived the purge
-    cols_to_encode = [c for c in ENCODE_COLS if c in df.columns]
+    cols_to_encode = [
+        c for c in ENCODE_COLS + CIRCUIT_CATEGORICAL_COLS if c in df.columns
+    ]
     for col in cols_to_encode:
         df[col] = df[col].astype(str)
         df[col] = le.fit_transform(df[col])
@@ -167,7 +215,7 @@ def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
     train_df = df[train_mask].copy()
     test_df = df[test_mask].copy()
 
-    print("\nData Split:")
+    print(f"\nData Split:")
     print(f"  Train {TRAIN_SEASONS}: {len(train_df)} rows")
     print(f"  Test  {TEST_SEASONS}: {len(test_df)} rows")
 
@@ -188,7 +236,7 @@ def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
     train_df.to_csv(OUT_TRAIN, index=False)
     test_df.to_csv(OUT_TEST, index=False)
 
-    print("\nFiles saved successfully:")
+    print(f"\nFiles saved successfully:")
     print(f"  - {OUT_TRAIN}")
     print(f"  - {OUT_TEST}")
 

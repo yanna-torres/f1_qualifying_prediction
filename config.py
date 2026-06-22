@@ -13,6 +13,7 @@ np.random.seed(42)
 # ── Paths ─────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
+DATA_PATH = DATA_DIR / "f1_v3_predictive.csv"
 DATA_PATH_WITH_FP = DATA_DIR / "qualifying_dataset_merged_with_fp.csv"
 DATA_PATH_WIDE_WITH_FP = DATA_DIR / "qualifying_dataset_wide_with_fp.csv"
 DATA_PATH_WITHOUT_FP = DATA_DIR / "qualifying_dataset_merged.csv"
@@ -45,7 +46,9 @@ RANDOM_STATE = 42
 CV_FOLDS = 5
 
 # ── Feature exclusions ────────────────────────────────────────────
-# Columns excluded from the feature matrix for all models.
+# Columns excluded from the feature matrix for all models, in every
+# ablation. These are dropped at preprocess_and_split() time and
+# never reach the saved train/test CSVs.
 DROP_COLS = ["SubSession", "Compound"]
 
 # Metadata columns attached to enriched prediction outputs
@@ -61,6 +64,11 @@ META_COLS = [
 # Each entry maps an ablation tag -> extra columns to exclude from
 # the feature matrix at LOAD time (inside load_and_split()), on top
 # of the columns already removed by DROP_COLS / the leakage purge.
+#
+# Note: apply_feature_engineering() in data.py converts FP1_s/FP2_s/
+# FP3_s into FP1_s_Delta_pct/FP2_s_Delta_pct/FP3_s_Delta_pct and drops
+# the raw columns. Ablations targeting Free Practice must therefore
+# reference the _Delta_pct names, not the raw FP*_s names.
 #
 # "full" is the baseline (no extra exclusions) and always exists.
 # Adding a new ablation here makes it immediately available to every
@@ -79,16 +87,32 @@ ABLATIONS = {
         "Rainfall",
         "Wet",
     ],
-    "no_weather_no_fp": [
-        "FP1_s_Delta_pct",
-        "FP2_s_Delta_pct",
-        "FP3_s_Delta_pct",
-        "AirTemp_C",
-        "TrackTemp_C",
-        "Humidity_pct",
-        "Pressure_hPa",
-        "WindSpeed_ms",
-        "Rainfall",
-        "Wet",
-    ],
 }
+
+# Composite ablation: derived from the two lists above so it can never
+# drift out of sync if "no_fp" or "no_weather" is edited later.
+ABLATIONS["no_weather_no_fp"] = list(
+    dict.fromkeys(ABLATIONS["no_fp"] + ABLATIONS["no_weather"])
+)
+
+ABLATIONS["fp_only"] = [
+    # Inverse of no_weather + no_sprint: isolates FP deltas as the
+    # only non-identity signal, alongside Circuit/Driver/Team.
+    "AirTemp_C",
+    "TrackTemp_C",
+    "Humidity_pct",
+    "Pressure_hPa",
+    "WindSpeed_ms",
+    "Rainfall",
+    "Wet",
+    "IsSprintWeekend",
+]
+
+ABLATIONS["weather_only"] = [
+    # Inverse of no_fp: isolates weather as the only non-identity
+    # signal, removing FP deltas and sprint flag.
+    "FP1_s_Delta_pct",
+    "FP2_s_Delta_pct",
+    "FP3_s_Delta_pct",
+    "IsSprintWeekend",
+]
