@@ -1,0 +1,10 @@
+{
+  "model": "SVR",
+  "best_params": {
+    "svr__C": "0.11299516083106617",
+    "svr__epsilon": "0.6708188643346285",
+    "svr__gamma": "0.01791236257104366",
+    "svr__kernel": "linear"
+  },
+  "cv_mae": 1.8911
+}

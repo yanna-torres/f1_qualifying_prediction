@@ -23,7 +23,7 @@ from models import lr_pipeline
 from models import mlp_pipeline
 from models import gpr_pipeline
 from models import gb_pipeline
-# from models import svr_pipeline
+from models import svr_pipeline
 
 # Maps CLI flag name -> pipeline module
 PIPELINE_REGISTRY = {
@@ -31,7 +31,7 @@ PIPELINE_REGISTRY = {
     "mlp": mlp_pipeline,
     "gpr": gpr_pipeline,
     "gb": gb_pipeline,
-    # "svr": svr_pipeline,
+    "svr": svr_pipeline,
 }
 
 
