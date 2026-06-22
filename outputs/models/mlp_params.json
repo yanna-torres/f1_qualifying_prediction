@@ -1,9 +1,9 @@
 {
   "model": "MLP",
   "best_params": {
-    "mlp__alpha": "4.9924534169239825e-05",
-    "mlp__hidden_layer_sizes": "(128, 64, 32)",
-    "mlp__learning_rate_init": "0.0037183641805732083"
+    "mlp__alpha": "0.0002246455168053261",
+    "mlp__hidden_layer_sizes": "(128, 64)",
+    "mlp__learning_rate_init": "0.007902619549708232"
   },
-  "cv_mae": 1.6045
+  "cv_mae": 1.9205
 }
