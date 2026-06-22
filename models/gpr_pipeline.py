@@ -41,7 +41,7 @@ TEST_PATH = "data/qualifying_dataset_test.csv"
 MAX_INDUCING_POINTS = 300  # Limite máximo de amostras por circuito (Otimização O(n³))
 
 # Colunas que vieram com LabelEncoder do data.py e precisam virar binárias (OHE)
-CATEGORICAL_COLS = ['Driver', 'Team', 'SubSession', 'q1_compound', 'q2_compound', 'q3_compound']
+CATEGORICAL_COLS = ['Driver', 'Team']
 
 class F1GaussianProcessPipeline:
     def __init__(self, train_path=TRAIN_PATH, test_path=TEST_PATH):

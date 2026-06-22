@@ -15,6 +15,9 @@ import argparse
 import sys
 from pathlib import Path
 
+import matplotlib
+matplotlib.use('Agg')
+
 sys.path.insert(0, str(Path(__file__).parent / "models"))
 
 from utils import save_results_table, plot_model_comparison

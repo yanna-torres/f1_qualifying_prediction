@@ -28,7 +28,7 @@ OUT_TEST = DATA_DIR / "qualifying_dataset_test.csv"
 ENCODE_COLS = ['Circuit', 'Driver', 'Team']
 
 # Compound columns that must share the same vocabulary/encoder
-COMPOUND_COLS = ['q1_compound', 'q2_compound', 'q3_compound']
+COMPOUND_COLS = []
 
 # Create output directories if they do not exist
 OUT_PREDS.mkdir(parents=True, exist_ok=True)
@@ -45,7 +45,8 @@ CV_FOLDS = 5
 # ── Feature exclusions ────────────────────────────────────────────
 # Columns excluded from the feature matrix for all models.
 DROP_COLS = [
-    
+    "SubSession",               
+    "Compound"
 ]
 
 # Metadata columns attached to enriched prediction outputs

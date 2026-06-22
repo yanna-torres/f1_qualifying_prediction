@@ -1,8 +1,8 @@
 """
 data.py
 =============
-Preprocessing, feature engineering (Label Encoding), and train/test split 
-for the F1 qualifying dataset, using centralized configurations.
+Preprocessing, feature engineering (Label Encoding, Deltas), anti-leakage purges,
+and train/test split for the F1 qualifying dataset, using centralized configurations.
 """
 
 import numpy as np
@@ -29,29 +29,82 @@ from config import (
     COMPOUND_COLS
 )
 
+def apply_feature_engineering(df):
+    """
+    Transforms absolute times into Relative Deltas (%).
+    A delta of 0.0 means the driver was the fastest in the session.
+    A delta of 0.01 means the driver was 1% slower than the leader.
+    """
+    print("\n  [Feature Engineering] Calculating Free Practice Deltas...")
+    
+    for fp in ['FP1_s', 'FP2_s', 'FP3_s']:
+        if fp in df.columns:
+            # Transform absolute zeros into NaN to avoid breaking the math
+            df[fp] = df[fp].replace({0.0: np.nan})
+            
+            # Find the minimum time (Free Practice Pole) for each specific race
+            min_times = df.groupby([SEASON_COL, 'Round'])[fp].transform('min')
+            
+            # Calculate the percentage difference: (My_Time - Best_Time) / Best_Time
+            delta_col_name = f"{fp}_Delta_pct"
+            df[delta_col_name] = (df[fp] - min_times) / min_times
+            
+            # Remove the absolute time column to force the model to look only at the Delta
+            df.drop(columns=[fp], inplace=True)
+            print(f"    -> Created column {delta_col_name} (Absolute {fp} times removed).")
+            
+    return df
+
+def purge_data_leakage(df):
+    """
+    Removes all columns generated DURING or AFTER qualifying.
+    This guarantees an honest predictive baseline.
+    """
+    print("\n  [Anti-Leakage] Purging future variables...")
+    
+    # Find all timing, speed, and tire columns from Q1, Q2, and Q3
+    leakage_cols = [c for c in df.columns if c.startswith(('q1_', 'q2_', 'q3_'))]
+    
+    # Add result variables that act as the exam's answer key
+    if 'quali_session_reached' in df.columns:
+        leakage_cols.append('quali_session_reached')
+        
+    df.drop(columns=leakage_cols, errors='ignore', inplace=True)
+    print(f"    -> {len(leakage_cols)} qualifying columns dropped to prevent Data Leakage.")
+    
+    return df
+
+
 def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
     """
-    Loads the dataset, restricts seasons, applies Label Encoding, 
-    converts booleans, handles missing values with train medians, 
-    removes drop columns, and saves the split CSVs.
+    Loads the dataset, applies anti-leakage rules, generates deltas, 
+    applies Label Encoding, handles missing values, and saves the CSVs.
     """
     print(f"Loading dataset from: {input_path}")
     df = pd.read_csv(input_path)
     df.columns = df.columns.str.strip()
-    df = df.rename(columns={"Year": "year", "YEAR": "year"})
+    df.rename(columns={"Year": "year", "YEAR": "year"}, inplace=True)
 
     # Restrict to configured seasons and drop NaNs in the Target Column
     df = df[df[SEASON_COL].isin(TRAIN_SEASONS + TEST_SEASONS)].copy()
     if TARGET_COL in df.columns:
         df = df.dropna(subset=[TARGET_COL])
 
+    # 1. PURGA DE DATA LEAKAGE (Deve ocorrer antes do Label Encoding)
+    df = purge_data_leakage(df)
+
+    # 2. FEATURE ENGINEERING (DELTAS)
+    df = apply_feature_engineering(df)
+    # ------------------------------------
+
     # Apply Label Encoder to standard categorical columns
     le = LabelEncoder()
-    for col in ENCODE_COLS:
-        if col in df.columns:
-            df[col] = df[col].astype(str)
-            df[col] = le.fit_transform(df[col])
-            print(f"  [Encoder] Column '{col}' transformed into numeric values.")
+    # Filter to ensure we only try to encode columns that survived the purge
+    cols_to_encode = [c for c in ENCODE_COLS if c in df.columns]
+    for col in cols_to_encode:
+        df[col] = df[col].astype(str)
+        df[col] = le.fit_transform(df[col])
+        print(f"  [Encoder] Column '{col}' transformed into numeric values.")
 
     # Apply shared Label Encoder to Compound columns
     existing_compounds = [c for c in COMPOUND_COLS if c in df.columns]
