@@ -3,6 +3,9 @@ lr_pipeline.py
 ==============
 Baseline Linear Regression pipeline for F1 qualifying position prediction.
 
+Supports feature ablation studies via the `ablation` parameter to
+main(), using the named column sets defined in config.ABLATIONS.
+
 Usage
 -----
     python models/lr_pipeline.py          # standalone
@@ -27,24 +30,43 @@ from utils import (
     plot_pred_vs_actual,
     plot_residuals,
 )
-from config import OUT_PREDS
+from config import OUT_PREDS, ABLATIONS
 
 MODEL_NAME = "LinearRegression"
 
 
-def main() -> dict:
+def main(ablation: str = "full") -> dict:
+    """
+    Parameters
+    ----------
+    ablation : str
+        Key into config.ABLATIONS. "full" (default) uses every
+        available feature. Any other key drops the extra columns
+        defined for that ablation before training.
+    """
+    if ablation not in ABLATIONS:
+        raise ValueError(
+            f"Unknown ablation '{ablation}'. Available: {list(ABLATIONS.keys())}"
+        )
+
+    model_tag = MODEL_NAME if ablation == "full" else f"{MODEL_NAME}_{ablation}"
+
     print("\n" + "=" * 55)
-    print(f"  BASELINE: {MODEL_NAME}")
+    print(f"  BASELINE: {model_tag}")
     print("=" * 55)
 
-    # 1. Load preprocessed data
-    X_train, X_test, y_train, y_test, train_df, test_df = load_and_split()
+    # 1. Load preprocessed data (with optional ablation columns dropped)
+    X_train, X_test, y_train, y_test, train_df, test_df = load_and_split(
+        extra_drop_cols=ABLATIONS[ablation]
+    )
 
     # 2. Build pipeline: scale features, then fit OLS
-    model = Pipeline([
-        ("scaler", StandardScaler()),
-        ("lr", LinearRegression()),
-    ])
+    model = Pipeline(
+        [
+            ("scaler", StandardScaler()),
+            ("lr", LinearRegression()),
+        ]
+    )
     model.fit(X_train, y_train)
     print("  Model trained.")
 
@@ -52,7 +74,7 @@ def main() -> dict:
     y_pred = model.predict(X_test)
 
     # 4. Standard metrics (MAE, RMSE, R2, Spearman, Top-1/Top-3)
-    result = evaluate(MODEL_NAME, y_test, y_pred)
+    result = evaluate(model_tag, y_test, y_pred)
 
     # 5. Error statistics
     residuals = y_test - y_pred
@@ -70,14 +92,14 @@ def main() -> dict:
         print(f"  {true:>6.1f}  {pred:>6.2f}  {true - pred:>+7.2f}")
 
     # 7. Save enriched predictions CSV
-    save_enriched_predictions(MODEL_NAME, test_df, y_test, y_pred)
+    save_enriched_predictions(model_tag, test_df, y_test, y_pred)
 
     # 8. Save figures
-    plot_pred_vs_actual(MODEL_NAME, y_test, y_pred)
-    plot_residuals(MODEL_NAME, y_test, y_pred)
+    plot_pred_vs_actual(model_tag, y_test, y_pred)
+    plot_residuals(model_tag, y_test, y_pred)
 
     # 9. Persist trained model
-    model_path = OUT_PREDS.parent / "models" / f"{MODEL_NAME.lower()}.pkl"
+    model_path = OUT_PREDS.parent / "models" / f"{model_tag.lower()}.pkl"
     model_path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, model_path)
     print(f"  Model saved -> {model_path}")
@@ -95,7 +117,7 @@ def main() -> dict:
     else:
         quality = "weak"
 
-    print(f"  Quality: {quality}  (MAE = {mae:.2f} grid positions on 2025 test season)")
+    print(f"  Quality: {quality}  (MAE = {mae:.2f} grid positions on test season)")
 
     if r2 > 0.80:
         print(f"  R2 = {r2:.3f}: model explains most variance in qualifying positions.")

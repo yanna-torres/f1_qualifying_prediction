@@ -26,8 +26,9 @@ from config import (
     TEST_SEASONS,
     DROP_COLS,
     ENCODE_COLS,
-    COMPOUND_COLS
+    COMPOUND_COLS,
 )
+
 
 def apply_feature_engineering(df):
     """
@@ -36,24 +37,27 @@ def apply_feature_engineering(df):
     A delta of 0.01 means the driver was 1% slower than the leader.
     """
     print("\n  [Feature Engineering] Calculating Free Practice Deltas...")
-    
-    for fp in ['FP1_s', 'FP2_s', 'FP3_s']:
+
+    for fp in ["FP1_s", "FP2_s", "FP3_s"]:
         if fp in df.columns:
             # Transform absolute zeros into NaN to avoid breaking the math
             df[fp] = df[fp].replace({0.0: np.nan})
-            
+
             # Find the minimum time (Free Practice Pole) for each specific race
-            min_times = df.groupby([SEASON_COL, 'Round'])[fp].transform('min')
-            
+            min_times = df.groupby([SEASON_COL, "Round"])[fp].transform("min")
+
             # Calculate the percentage difference: (My_Time - Best_Time) / Best_Time
             delta_col_name = f"{fp}_Delta_pct"
             df[delta_col_name] = (df[fp] - min_times) / min_times
-            
+
             # Remove the absolute time column to force the model to look only at the Delta
             df.drop(columns=[fp], inplace=True)
-            print(f"    -> Created column {delta_col_name} (Absolute {fp} times removed).")
-            
+            print(
+                f"    -> Created column {delta_col_name} (Absolute {fp} times removed)."
+            )
+
     return df
+
 
 def purge_data_leakage(df):
     """
@@ -61,24 +65,31 @@ def purge_data_leakage(df):
     This guarantees an honest predictive baseline.
     """
     print("\n  [Anti-Leakage] Purging future variables...")
-    
+
     # Find all timing, speed, and tire columns from Q1, Q2, and Q3
-    leakage_cols = [c for c in df.columns if c.startswith(('q1_', 'q2_', 'q3_'))]
-    
+    leakage_cols = [c for c in df.columns if c.startswith(("q1_", "q2_", "q3_"))]
+
     # Add result variables that act as the exam's answer key
-    if 'quali_session_reached' in df.columns:
-        leakage_cols.append('quali_session_reached')
-        
-    df.drop(columns=leakage_cols, errors='ignore', inplace=True)
-    print(f"    -> {len(leakage_cols)} qualifying columns dropped to prevent Data Leakage.")
-    
+    if "quali_session_reached" in df.columns:
+        leakage_cols.append("quali_session_reached")
+
+    df.drop(columns=leakage_cols, errors="ignore", inplace=True)
+    print(
+        f"    -> {len(leakage_cols)} qualifying columns dropped to prevent Data Leakage."
+    )
+
     return df
 
 
 def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
     """
-    Loads the dataset, applies anti-leakage rules, generates deltas, 
+    Loads the dataset, applies anti-leakage rules, generates deltas,
     applies Label Encoding, handles missing values, and saves the CSVs.
+
+    Note: this function runs ONCE to produce the saved train/test CSVs
+    (OUT_TRAIN / OUT_TEST). Feature ablations (see config.ABLATIONS)
+    are applied later, in load_and_split(), so that switching between
+    ablations does not require re-running this expensive step.
     """
     print(f"Loading dataset from: {input_path}")
     df = pd.read_csv(input_path)
@@ -110,32 +121,40 @@ def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
     existing_compounds = [c for c in COMPOUND_COLS if c in df.columns]
     if existing_compounds:
         # Flatten all compound values to create a single consistent vocabulary
-        all_compounds = pd.concat([df[c].astype(str) for c in existing_compounds]).unique()
+        all_compounds = pd.concat(
+            [df[c].astype(str) for c in existing_compounds]
+        ).unique()
         compound_le = LabelEncoder()
         compound_le.fit(all_compounds)
-        
+
         for col in existing_compounds:
             df[col] = df[col].astype(str)
             df[col] = compound_le.transform(df[col])
-            print(f"  [Encoder] Column '{col}' transformed with shared compound mapping.")
+            print(
+                f"  [Encoder] Column '{col}' transformed with shared compound mapping."
+            )
 
     # Convert boolean columns to integers (1 and 0)
-    pure_bools = df.select_dtypes(include=['bool']).columns
+    pure_bools = df.select_dtypes(include=["bool"]).columns
     if len(pure_bools) > 0:
         df[pure_bools] = df[pure_bools].astype(int)
-        print(f"  [Booleans] {len(pure_bools)} pure boolean columns converted to integers.")
+        print(
+            f"  [Booleans] {len(pure_bools)} pure boolean columns converted to integers."
+        )
 
-    replace_map = {True: 1, False: 0, 'True': 1, 'False': 0}
-    
+    replace_map = {True: 1, False: 0, "True": 1, "False": 0}
+
     for col in df.columns:
-        if df[col].dtype == 'object':
+        if df[col].dtype == "object":
             # Checks if the column actually contains the word True or False.
-            if df[col].isin([True, False, 'True', 'False']).any():
+            if df[col].isin([True, False, "True", "False"]).any():
                 df[col] = df[col].replace(replace_map)
-                
+
                 # Convert to numeric (float) so that median imputation can fill in the NaNs afterwards.
-                df[col] = pd.to_numeric(df[col], errors='ignore')
-                print(f"  [Booleans] Mixed boolean column '{col}' converted to numeric (1/0/NaN).")
+                df[col] = pd.to_numeric(df[col], errors="ignore")
+                print(
+                    f"  [Booleans] Mixed boolean column '{col}' converted to numeric (1/0/NaN)."
+                )
 
     # Split into Train and Test sets based on config
     train_mask = df[SEASON_COL].isin(TRAIN_SEASONS)
@@ -147,17 +166,17 @@ def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
 
     train_df = df[train_mask].copy()
     test_df = df[test_mask].copy()
-    
-    print(f"\nData Split:")
+
+    print("\nData Split:")
     print(f"  Train {TRAIN_SEASONS}: {len(train_df)} rows")
     print(f"  Test  {TEST_SEASONS}: {len(test_df)} rows")
 
     # Replace NaN values with medians (Strictly avoiding Data Leakage)
     numeric_cols = train_df.select_dtypes(include=[np.number]).columns
-    
+
     # Calculate the median using only past knowledge (Train)
     train_medians = train_df[numeric_cols].median()
-    
+
     # Apply this same median to both train and test sets
     train_df[numeric_cols] = train_df[numeric_cols].fillna(train_medians)
     test_df[numeric_cols] = test_df[numeric_cols].fillna(train_medians)
@@ -165,20 +184,33 @@ def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
 
     # Save the CSV files separately using config paths
     os.makedirs(OUT_TRAIN.parent, exist_ok=True)
-    
+
     train_df.to_csv(OUT_TRAIN, index=False)
     test_df.to_csv(OUT_TEST, index=False)
-    
-    print(f"\nFiles saved successfully:")
+
+    print("\nFiles saved successfully:")
     print(f"  - {OUT_TRAIN}")
     print(f"  - {OUT_TEST}")
 
-def load_and_split():
+
+def load_and_split(extra_drop_cols=None):
     """
     Load preprocessed train/test CSVs and return feature matrices,
     target vectors, and full DataFrames for metadata attachment.
 
     Runs preprocess_and_split() automatically if the files are missing.
+
+    Parameters
+    ----------
+    extra_drop_cols : list[str] or None
+        Additional columns to exclude from the feature matrix, on top
+        of DROP_COLS and TARGET_COL. Used for feature ablation studies
+        (see config.ABLATIONS) — e.g. dropping FP1_s_Delta_pct/
+        FP2_s_Delta_pct/FP3_s_Delta_pct to test performance without
+        Free Practice data. Columns named here that are not present
+        in the dataset are ignored (no error raised), so the same
+        ablation list can be reused safely even if a column was
+        renamed or removed upstream.
 
     Returns
     -------
@@ -194,6 +226,9 @@ def load_and_split():
     test_df = pd.read_csv(OUT_TEST)
 
     exclude = set([TARGET_COL] + DROP_COLS)
+    if extra_drop_cols:
+        exclude |= set(extra_drop_cols)
+
     feature_cols = [c for c in train_df.columns if c not in exclude]
 
     X_train = train_df[feature_cols]
@@ -202,6 +237,14 @@ def load_and_split():
     y_test = test_df[TARGET_COL].to_numpy()
 
     print(f"Loaded  train: {X_train.shape}  |  test: {X_test.shape}")
+    if extra_drop_cols:
+        actually_dropped = [
+            c
+            for c in extra_drop_cols
+            if c in set(pd.read_csv(OUT_TRAIN, nrows=0).columns)
+        ]
+        print(f"  [Ablation] Extra columns excluded: {actually_dropped}")
+
     return X_train, X_test, y_train, y_test, train_df, test_df
 
 

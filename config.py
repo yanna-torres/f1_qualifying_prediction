@@ -6,6 +6,9 @@ All model scripts and utilities import from here.
 """
 
 from pathlib import Path
+import numpy as np
+
+np.random.seed(42)
 
 # ── Paths ─────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent
@@ -25,7 +28,7 @@ OUT_TRAIN = DATA_DIR / "qualifying_dataset_train.csv"
 OUT_TEST = DATA_DIR / "qualifying_dataset_test.csv"
 
 # Categorical columns to be individually encoded
-ENCODE_COLS = ['Circuit', 'Driver', 'Team']
+ENCODE_COLS = ["Circuit", "Driver", "Team"]
 
 # Compound columns that must share the same vocabulary/encoder
 COMPOUND_COLS = []
@@ -57,3 +60,38 @@ META_COLS = [
     "Driver",
     "Team",
 ]
+
+# ── Ablation studies ──────────────────────────────────────────────
+# Each entry maps an ablation tag -> extra columns to exclude from
+# the feature matrix at LOAD time (inside load_and_split()), on top
+# of the columns already removed by DROP_COLS / the leakage purge.
+#
+# "full" is the baseline (no extra exclusions) and always exists.
+# Adding a new ablation here makes it immediately available to every
+# model pipeline and to run_all.py's --ablation flag.
+ABLATIONS = {
+    "full": [],
+    "no_fp": ["FP1_s_Delta_pct", "FP2_s_Delta_pct", "FP3_s_Delta_pct"],
+    "no_fp1_fp2": ["FP1_s_Delta_pct", "FP2_s_Delta_pct"],
+    "no_weather": [
+        "AirTemp_C",
+        "TrackTemp_C",
+        "Humidity_pct",
+        "Pressure_hPa",
+        "WindSpeed_ms",
+        "Rainfall",
+        "Wet",
+    ],
+    "no_history": [
+        "driver_champ_pos_before",
+        "driver_points_before",
+        "driver_wins_before",
+        "driver_rolling_pos_5",
+        "constructor_champ_pos_before",
+        "constructor_points_before",
+        "constructor_wins_before",
+        "driver_avg_pace_circuit",
+        "driver_circuit_appearances",
+        "driver_lap_consistency",
+    ],
+}

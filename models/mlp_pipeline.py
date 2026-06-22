@@ -2,6 +2,9 @@
 models/mlp_pipeline.py
 =======================
 MLP regression pipeline for F1 qualifying grid position prediction.
+
+Supports feature ablation studies via the `ablation` parameter to
+main(), using the named column sets defined in config.ABLATIONS.
 """
 
 import sys
@@ -15,7 +18,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import RandomizedSearchCV, KFold
 from sklearn.pipeline import Pipeline
 
-from config import RANDOM_STATE, CV_FOLDS
+from config import RANDOM_STATE, CV_FOLDS, ABLATIONS
 from utils import (
     load_and_split,
     evaluate,
@@ -81,24 +84,41 @@ def tune(X_train, y_train):
     return search.best_estimator_, search
 
 
-def main():
-    print(f"\n{'=' * 55}\n  {MODEL_NAME} pipeline\n{'=' * 55}")
+def main(ablation: str = "full"):
+    """
+    Parameters
+    ----------
+    ablation : str
+        Key into config.ABLATIONS. "full" (default) uses every
+        available feature. Any other key drops the extra columns
+        defined for that ablation before training.
+    """
+    if ablation not in ABLATIONS:
+        raise ValueError(
+            f"Unknown ablation '{ablation}'. Available: {list(ABLATIONS.keys())}"
+        )
 
-    X_train, X_test, y_train, y_test, _, test_df = load_and_split()
+    model_tag = MODEL_NAME if ablation == "full" else f"{MODEL_NAME}_{ablation}"
+
+    print(f"\n{'=' * 55}\n  {model_tag} pipeline\n{'=' * 55}")
+
+    X_train, X_test, y_train, y_test, _, test_df = load_and_split(
+        extra_drop_cols=ABLATIONS[ablation]
+    )
 
     model, search = tune(X_train, y_train)
     y_pred = model.predict(X_test)
 
-    results = evaluate(MODEL_NAME, y_test, y_pred, label="2024 season (held-out)")
+    results = evaluate(model_tag, y_test, y_pred, label="held-out test season")
 
     save_model(
-        model, MODEL_NAME, best_params=search.best_params_, cv_mae=-search.best_score_
+        model, model_tag, best_params=search.best_params_, cv_mae=-search.best_score_
     )
 
-    plot_pred_vs_actual(MODEL_NAME, y_test, y_pred)
-    plot_residuals(MODEL_NAME, y_test, y_pred)
-    plot_search_results(MODEL_NAME, search)
-    save_enriched_predictions(MODEL_NAME, test_df, y_test, y_pred)
+    plot_pred_vs_actual(model_tag, y_test, y_pred)
+    plot_residuals(model_tag, y_test, y_pred)
+    plot_search_results(model_tag, search)
+    save_enriched_predictions(model_tag, test_df, y_test, y_pred)
 
     return results
 
