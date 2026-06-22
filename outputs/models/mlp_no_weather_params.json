@@ -1,0 +1,9 @@
+{
+  "model": "MLP_no_weather",
+  "best_params": {
+    "mlp__alpha": "6.516990611177177e-05",
+    "mlp__hidden_layer_sizes": "(256, 128, 64)",
+    "mlp__learning_rate_init": "0.0014910847596941083"
+  },
+  "cv_mae": 3.3772
+}

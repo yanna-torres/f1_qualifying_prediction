@@ -1,0 +1,15 @@
+{
+  "model": "GradientBoosting_no_weather",
+  "best_params": {
+    "colsample_bytree": "0.7",
+    "learning_rate": "0.01758720770925141",
+    "max_depth": "8",
+    "min_child_samples": "27",
+    "n_estimators": "324",
+    "num_leaves": "15",
+    "reg_alpha": "0.0015769192447197536",
+    "reg_lambda": "0.0005302422876684355",
+    "subsample": "0.9"
+  },
+  "cv_mae": 3.1316
+}

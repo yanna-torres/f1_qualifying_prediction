@@ -46,10 +46,7 @@ CV_FOLDS = 5
 
 # ── Feature exclusions ────────────────────────────────────────────
 # Columns excluded from the feature matrix for all models.
-DROP_COLS = [
-    "SubSession",               
-    "Compound"
-]
+DROP_COLS = ["SubSession", "Compound"]
 
 # Metadata columns attached to enriched prediction outputs
 META_COLS = [
@@ -72,7 +69,20 @@ ABLATIONS = {
     "full": [],
     "no_fp": ["FP1_s_Delta_pct", "FP2_s_Delta_pct", "FP3_s_Delta_pct"],
     "no_fp1_fp2": ["FP1_s_Delta_pct", "FP2_s_Delta_pct"],
+    "no_fp1": ["FP1_s_Delta_pct"],
     "no_weather": [
+        "AirTemp_C",
+        "TrackTemp_C",
+        "Humidity_pct",
+        "Pressure_hPa",
+        "WindSpeed_ms",
+        "Rainfall",
+        "Wet",
+    ],
+    "no_weather_no_fp": [
+        "FP1_s_Delta_pct",
+        "FP2_s_Delta_pct",
+        "FP3_s_Delta_pct",
         "AirTemp_C",
         "TrackTemp_C",
         "Humidity_pct",
