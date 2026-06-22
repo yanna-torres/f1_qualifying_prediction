@@ -81,16 +81,4 @@ ABLATIONS = {
         "Rainfall",
         "Wet",
     ],
-    "no_history": [
-        "driver_champ_pos_before",
-        "driver_points_before",
-        "driver_wins_before",
-        "driver_rolling_pos_5",
-        "constructor_champ_pos_before",
-        "constructor_points_before",
-        "constructor_wins_before",
-        "driver_avg_pace_circuit",
-        "driver_circuit_appearances",
-        "driver_lap_consistency",
-    ],
 }
