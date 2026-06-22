@@ -1,0 +1,15 @@
+{
+  "model": "GradientBoosting_fp_only",
+  "best_params": {
+    "colsample_bytree": "0.7",
+    "learning_rate": "0.006859835746759407",
+    "max_depth": "8",
+    "min_child_samples": "36",
+    "n_estimators": "707",
+    "num_leaves": "102",
+    "reg_alpha": "0.3274121520988885",
+    "reg_lambda": "0.0065788201191231774",
+    "subsample": "0.6"
+  },
+  "cv_mae": 3.1381
+}

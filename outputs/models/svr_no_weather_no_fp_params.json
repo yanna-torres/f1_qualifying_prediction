@@ -1,10 +1,10 @@
 {
   "model": "SVR_no_weather_no_fp",
   "best_params": {
-    "svr__C": "182.74508859815987",
-    "svr__epsilon": "0.13199942261535016",
-    "svr__gamma": "0.08241925264876443",
-    "svr__kernel": "rbf"
+    "svr__C": "0.3661819220392428",
+    "svr__epsilon": "0.2550298070162892",
+    "svr__gamma": "0.00019870215385428647",
+    "svr__kernel": "poly"
   },
-  "cv_mae": 4.6688
+  "cv_mae": 4.9627
 }

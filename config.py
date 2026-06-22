@@ -65,11 +65,6 @@ META_COLS = [
 # the feature matrix at LOAD time (inside load_and_split()), on top
 # of the columns already removed by DROP_COLS / the leakage purge.
 #
-# Note: apply_feature_engineering() in data.py converts FP1_s/FP2_s/
-# FP3_s into FP1_s_Delta_pct/FP2_s_Delta_pct/FP3_s_Delta_pct and drops
-# the raw columns. Ablations targeting Free Practice must therefore
-# reference the _Delta_pct names, not the raw FP*_s names.
-#
 # "full" is the baseline (no extra exclusions) and always exists.
 # Adding a new ablation here makes it immediately available to every
 # model pipeline and to run_all.py's --ablation flag.
@@ -86,6 +81,14 @@ ABLATIONS = {
         "WindSpeed_ms",
         "Rainfall",
         "Wet",
+    ],
+    "no_circuit_metadata": [
+        "circuit_layout",
+        "circuit_speed",
+        "circuit_character",
+        "track_length_km",
+        "num_corners",
+        "elevation_change_m",
     ],
 }
 
