@@ -1,5 +1,5 @@
 """
-build_qualifying_dataset.py
+utils/build_qualifying_dataset.py
 ============================
 Builds a qualifying lap time dataset for F1 seasons 2022-2025 using
 FastF1 as the sole data source.

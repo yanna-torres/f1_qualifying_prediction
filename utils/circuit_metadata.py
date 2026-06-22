@@ -1,5 +1,5 @@
 """
-circuit_metadata.py
+utils/circuit_metadata.py
 ====================
 Manual lookup table of circuit characteristics, keyed by the original
 Circuit name as it appears in qualifying_dataset_wide_with_fp.csv
