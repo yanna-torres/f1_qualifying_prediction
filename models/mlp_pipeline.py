@@ -1,7 +1,7 @@
 """
 models/mlp_pipeline.py
 =======================
-MLP regression model for F1 qualifying grid position prediction.
+MLP regression pipeline for F1 qualifying grid position prediction.
 """
 
 import sys

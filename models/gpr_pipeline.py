@@ -1,9 +1,9 @@
 """
-train_gpr.py
+gpr_pipeline.py
 =============
-Pipeline de Treinamento Avançado utilizando Processos Gaussianos (GPR).
-Implementa Modelos Particionados (por Circuito), One-Hot Encoding seguro,
-Redução de Dimensionalidade (K-Means / Inducing Points) e GridSearchCV.
+Advanced training pipeline using Gaussian Process Regression (GPR).
+Implements partitioned models (per circuit), safe One-Hot Encoding,
+dimensionality reduction (K-Means / inducing points), and GridSearchCV.
 """
 
 import os
@@ -30,6 +30,10 @@ except ImportError:
     TARGET_COL = 'quali_position'
     OUT_PREDS = Path("outputs/predictions")
     OUT_RESULTS = Path("outputs/results_table.csv")
+
+from scipy.stats import spearmanr
+
+MODEL_NAME = "GPR"
 
 # Constantes do Modelo
 TRAIN_PATH = "data/qualifying_dataset_train.csv"
@@ -177,7 +181,7 @@ class F1GaussianProcessPipeline:
                 })
 
         # 8. Reconstrução e Avaliação Global
-        self._evaluate_global_performance()
+        return self._evaluate_global_performance()
 
     def _evaluate_global_performance(self):
         """Reconstroi as predições na ordem original e calcula métricas do ano de teste."""
@@ -189,20 +193,19 @@ class F1GaussianProcessPipeline:
         
         # Pega o alvo real (y_test) original e alinha os índices
         y_test_real = self.test_df[TARGET_COL].loc[preds_df.index]
+        y_pred = preds_df['pred_quali_position']
 
         # Calcula as métricas
-        rmse = np.sqrt(mean_squared_error(y_test_real, preds_df['pred_quali_position']))
-        mae = mean_absolute_error(y_test_real, preds_df['pred_quali_position'])
-        r2 = r2_score(y_test_real, preds_df['pred_quali_position'])
+        rmse = np.sqrt(mean_squared_error(y_test_real, y_pred))
+        mae = mean_absolute_error(y_test_real, y_pred)
+        r2 = r2_score(y_test_real, y_pred)
+        rho, pval = spearmanr(y_test_real, y_pred)
 
         print(f"RMSE: {rmse:.3f}")
         print(f"MAE:  {mae:.3f}")
         print(f"R²:   {r2:.3f}")
+        print(f"Spearman rho: {rho:.4f} (p = {pval:.4e})")
 
-        # Salva resultados
-        final_df = self.test_df.copy()
-        final_df['pred_quali_position'] = preds_df['pred_quali_position']
-        final_df['pred_std'] = preds_df['pred_std']
         # Salva resultados originais (floats)
         final_df = self.test_df.copy()
         final_df['pred_quali_position'] = preds_df['pred_quali_position']
@@ -218,16 +221,37 @@ class F1GaussianProcessPipeline:
         acerto_exato = (erro_absoluto == 0).mean() * 100
         acerto_margem_1 = (erro_absoluto <= 1).mean() * 100
         acerto_margem_2 = (erro_absoluto <= 2).mean() * 100
+        acerto_margem_3 = (erro_absoluto <= 3).mean() * 100
 
         print(f"\nMÉTRICAS PERCENTUAIS DE NEGÓCIO:")
         print(f"Acerto Exato: {acerto_exato:.1f}%")
         print(f"Acerto com Margem de ±1: {acerto_margem_1:.1f}% das previsões")
         print(f"Acerto com Margem de ±2: {acerto_margem_2:.1f}% das previsões")
+        print(f"Acerto com Margem de ±3: {acerto_margem_3:.1f}% das previsões")
         
         out_file = OUT_PREDS / "gpr_predictions_2025.csv"
         final_df.to_csv(out_file, index=False)
         print(f"Predições completas salvas em: {out_file}")
 
-if __name__ == "__main__":
+        # Result dict in the same shape as utils.eval.evaluate(), so
+        # run_all.py can aggregate this alongside the other models.
+        return {
+            "model": MODEL_NAME,
+            "MAE": mae,
+            "RMSE": rmse,
+            "R2": r2,
+            "Spearman_rho": rho,
+            "Spearman_p": pval,
+            "Top1_acc": acerto_margem_1 / 100,
+            "Top3_acc": acerto_margem_3 / 100,
+            "y_pred": y_pred.to_numpy(),
+        }
+
+
+def main():
     pipeline = F1GaussianProcessPipeline()
-    pipeline.run_pipeline()
+    return pipeline.run_pipeline()
+
+
+if __name__ == "__main__":
+    main()
