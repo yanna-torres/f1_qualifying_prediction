@@ -13,6 +13,7 @@ np.random.seed(42)
 # ── Paths ─────────────────────────────────────────────────────────
 ROOT = Path(__file__).parent
 DATA_DIR = ROOT / "data"
+DATA_PATH = DATA_DIR / "f1_v3_predictive.csv"
 DATA_PATH_WITH_FP = DATA_DIR / "qualifying_dataset_merged_with_fp.csv"
 DATA_PATH_WIDE_WITH_FP = DATA_DIR / "qualifying_dataset_wide_with_fp.csv"
 DATA_PATH_WITHOUT_FP = DATA_DIR / "qualifying_dataset_merged.csv"
@@ -22,6 +23,8 @@ OUTPUT_DIR = ROOT / "outputs"
 OUT_PREDS = OUTPUT_DIR / "predictions"
 OUT_FIGS = OUTPUT_DIR / "figures"
 OUT_RESULTS = OUTPUT_DIR / "results_table.csv"
+OUT_PREDS = OUTPUT_DIR / "predictions"
+OUT_FIGS = OUTPUT_DIR / "figures"
 # ── Output CSV Paths (Train/Test Split) ───────────────────────────
 OUT_TRAIN = DATA_DIR / "qualifying_dataset_train.csv"
 OUT_TEST = DATA_DIR / "qualifying_dataset_test.csv"
@@ -45,7 +48,9 @@ RANDOM_STATE = 42
 CV_FOLDS = 5
 
 # ── Feature exclusions ────────────────────────────────────────────
-# Columns excluded from the feature matrix for all models.
+# Columns excluded from the feature matrix for all models, in every
+# ablation. These are dropped at preprocess_and_split() time and
+# never reach the saved train/test CSVs.
 DROP_COLS = ["SubSession", "Compound"]
 
 # Metadata columns attached to enriched prediction outputs
@@ -79,16 +84,40 @@ ABLATIONS = {
         "Rainfall",
         "Wet",
     ],
-    "no_weather_no_fp": [
-        "FP1_s_Delta_pct",
-        "FP2_s_Delta_pct",
-        "FP3_s_Delta_pct",
-        "AirTemp_C",
-        "TrackTemp_C",
-        "Humidity_pct",
-        "Pressure_hPa",
-        "WindSpeed_ms",
-        "Rainfall",
-        "Wet",
+    "no_circuit_metadata": [
+        "circuit_layout",
+        "circuit_speed",
+        "circuit_character",
+        "track_length_km",
+        "num_corners",
+        "elevation_change_m",
     ],
 }
+
+# Composite ablation: derived from the two lists above so it can never
+# drift out of sync if "no_fp" or "no_weather" is edited later.
+ABLATIONS["no_weather_no_fp"] = list(
+    dict.fromkeys(ABLATIONS["no_fp"] + ABLATIONS["no_weather"])
+)
+
+ABLATIONS["fp_only"] = [
+    # Inverse of no_weather + no_sprint: isolates FP deltas as the
+    # only non-identity signal, alongside Circuit/Driver/Team.
+    "AirTemp_C",
+    "TrackTemp_C",
+    "Humidity_pct",
+    "Pressure_hPa",
+    "WindSpeed_ms",
+    "Rainfall",
+    "Wet",
+    "IsSprintWeekend",
+]
+
+ABLATIONS["weather_only"] = [
+    # Inverse of no_fp: isolates weather as the only non-identity
+    # signal, removing FP deltas and sprint flag.
+    "FP1_s_Delta_pct",
+    "FP2_s_Delta_pct",
+    "FP3_s_Delta_pct",
+    "IsSprintWeekend",
+]

@@ -1,5 +1,5 @@
 """
-plot.py
+utils/plot.py
 =============
 All plotting functions for the F1 qualifying prediction study.
 Figures are saved to outputs/figures/.

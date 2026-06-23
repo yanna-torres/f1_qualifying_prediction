@@ -1,17 +1,18 @@
 """
 run_all.py
 ==========
-Runs one or more model pipelines, optionally under a named feature
-ablation, then produces the aggregated results table and comparison
+Runs one or more model pipelines, across one or more named feature
+ablations, then produces the aggregated results table and comparison
 plots.
 
 Usage:
-    python run_all.py                          # all models, full features
-    python run_all.py --mlp                    # only MLP, full features
-    python run_all.py --ablation no_fp          # all models, without FP data
-    python run_all.py --mlp --ablation no_fp    # only MLP, without FP data
-    python run_all.py --list                    # show available model flags
-    python run_all.py --list-ablations           # show available ablations
+    python run_all.py                              # ALL models x ALL ablations
+    python run_all.py --mlp                        # MLP, all ablations
+    python run_all.py --ablation no_fp              # all models, no_fp only
+    python run_all.py --mlp --ablation no_fp        # MLP, no_fp only
+    python run_all.py --ablation full --ablation no_fp   # explicit subset of ablations
+    python run_all.py --list                        # show available model flags
+    python run_all.py --list-ablations               # show available ablations
 """
 
 import argparse
@@ -55,9 +56,14 @@ def parse_args():
         )
     parser.add_argument(
         "--ablation",
-        default="full",
+        action="append",
         choices=list(ABLATIONS.keys()),
-        help="Feature ablation to run (default: full, i.e. no exclusions).",
+        default=None,
+        help=(
+            "Feature ablation to run. Can be passed multiple times "
+            "(e.g. --ablation full --ablation no_fp). If omitted "
+            "entirely, ALL ablations in config.ABLATIONS are run."
+        ),
     )
     parser.add_argument(
         "--list",
@@ -89,17 +95,24 @@ def main():
 
     selected_flags = [flag for flag in PIPELINE_REGISTRY if getattr(args, flag)]
 
-    # No model flags passed → run everything
+    # No model flags passed -> run every model
     if not selected_flags:
         selected_flags = list(PIPELINE_REGISTRY.keys())
 
-    print(f"Running: {', '.join(selected_flags)}   |   ablation: {args.ablation}\n")
+    # No --ablation passed at all -> run every ablation
+    selected_ablations = args.ablation if args.ablation else list(ABLATIONS.keys())
+
+    print(
+        f"Running: {', '.join(selected_flags)}   "
+        f"|   ablations: {', '.join(selected_ablations)}\n"
+    )
 
     results = []
-    for flag in selected_flags:
-        pipeline = PIPELINE_REGISTRY[flag]
-        r = pipeline.main(ablation=args.ablation)
-        results.append(r)
+    for ablation in selected_ablations:
+        for flag in selected_flags:
+            pipeline = PIPELINE_REGISTRY[flag]
+            r = pipeline.main(ablation=ablation)
+            results.append(r)
 
     print("\n\n" + "=" * 55)
     print("  AGGREGATED RESULTS")

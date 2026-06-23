@@ -1,5 +1,5 @@
 """
-plot_results.py
+utils/plot_results_gpr.py
 =============
 Script para geração de gráficos analíticos e de performance 
 baseados nas predições do modelo de Processo Gaussiano.
