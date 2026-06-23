@@ -2,15 +2,12 @@
 gpr_pipeline.py
 =============
 Advanced training pipeline using Gaussian Process Regression (GPR).
-Implements partitioned models (per circuit), safe One-Hot Encoding,
-dimensionality reduction (K-Means / inducing points), and GridSearchCV.
+Executes an Ablation Study comparing two architectures:
+1. Partitioned (Local): One GPR model per circuit.
+2. Global: A single unified GPR model learning from all circuits combined.
 
-Supports feature ablation studies via the `ablation` parameter to
-main(), using the named column sets defined in config.ABLATIONS.
-Unlike the other model pipelines, GPR does not use utils.data.
-load_and_split() — it reads OUT_TRAIN/OUT_TEST directly because it
-partitions training per circuit. Ablation columns are therefore
-dropped manually in __init__, right after loading the CSVs.
+Reads data centrally using utils.load_and_split().
+Saves both models for reproducibility.
 """
 
 import os
@@ -31,69 +28,49 @@ from sklearn.metrics import (
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, Matern, WhiteKernel, ConstantKernel
 from sklearn.model_selection import GridSearchCV
+from scipy.stats import spearmanr
 
-# Injeta a raiz do projeto no path para importar o config
+# Injeta a raiz do projeto no path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-try:
-    from config import TARGET_COL, OUT_PREDS, OUT_RESULTS, ABLATIONS
-except ImportError:
-    # Fallback caso o config.py não esteja acessível diretamente
-    TARGET_COL = "quali_position"
-    OUT_PREDS = Path("outputs/predictions")
-    OUT_RESULTS = Path("outputs/results_table.csv")
-    ABLATIONS = {"full": []}
-
-from scipy.stats import spearmanr
+from config import TARGET_COL, OUT_PREDS, OUT_RESULTS, ABLATIONS
+from utils import load_and_split, save_model
 
 MODEL_NAME = "GPR"
 
-# Constantes do Modelo
-TRAIN_PATH = "data/qualifying_dataset_train.csv"
-TEST_PATH = "data/qualifying_dataset_test.csv"
-MAX_INDUCING_POINTS = 300  # Limite máximo de amostras por circuito (Otimização O(n³))
+# Limite máximo de amostras (Otimização O(n³))
+MAX_INDUCING_POINTS_PARTITIONED = 300  
+MAX_INDUCING_POINTS_GLOBAL = 600  # O global precisa de mais pontos para capturar a variação de todas as pistas
 
-# Colunas que vieram com LabelEncoder do data.py e precisam virar binárias (OHE)
-CATEGORICAL_COLS = ["Driver", "Team"]
+CATEGORICAL_COLS_BASE = ["Driver", "Team"]
 
 
 class F1GaussianProcessPipeline:
-    def __init__(
-        self, train_path=TRAIN_PATH, test_path=TEST_PATH, extra_drop_cols=None
-    ):
-        print("Inicializando Pipeline GPR...")
-        self.train_df = pd.read_csv(train_path)
-        self.test_df = pd.read_csv(test_path)
+    def __init__(self, X_train, X_test, y_train, train_df, test_df):
+        self.X_train = X_train
+        self.X_test = X_test
+        self.y_train = y_train
+        self.train_df = train_df
+        self.test_df = test_df
 
-        # Apply ablation column drops, if any. Columns not present in
-        # the dataset are ignored silently (errors='ignore') so the
-        # same ablation list stays safe to reuse across dataset versions.
-        if extra_drop_cols:
-            self.train_df = self.train_df.drop(columns=extra_drop_cols, errors="ignore")
-            self.test_df = self.test_df.drop(columns=extra_drop_cols, errors="ignore")
-            actually_dropped = [
-                c
-                for c in extra_drop_cols
-                if c in pd.read_csv(train_path, nrows=0).columns
-            ]
-            print(f"  [Ablation] Extra columns excluded: {actually_dropped}")
+        # Estruturas para o Modelo Particionado
+        self.models_part = {}
+        self.preds_part = []
+        self.cv_scores_part = {}
+        self.best_params_part = {}
 
-        self.models = {}  # Dicionário para guardar o melhor modelo de cada circuito
-        self.predictions = []  # Lista para reconstruir as predições do teste
+        # Estruturas para o Modelo Global
+        self.model_glob = None
+        self.preds_glob = []
+        self.cv_score_glob = 0.0
+        self.best_params_glob = {}
 
-        # Garante que os diretórios de saída existam
         os.makedirs(OUT_PREDS, exist_ok=True)
         os.makedirs(OUT_RESULTS.parent, exist_ok=True)
 
-    def _build_preprocessor(self, X_sample):
-        """
-        Cria o pipeline de pré-processamento.
-        Aplica OHE nas categóricas e StandardScaler nas numéricas.
-        """
-        # Identifica colunas presentes no dataset que precisam de OHE
-        cat_cols = [c for c in CATEGORICAL_COLS if c in X_sample.columns]
-
-        # O resto é considerado numérico (telemetria, clima, etc)
+    def _build_preprocessor(self, X_sample, cat_features):
+        """Constrói o preprocessor dinamicamente dependendo de quais features categóricas são passadas."""
+        cat_cols = [c for c in cat_features if c in X_sample.columns]
         num_cols = [c for c in X_sample.columns if c not in cat_cols]
 
         preprocessor = ColumnTransformer(
@@ -109,174 +86,158 @@ class F1GaussianProcessPipeline:
         return preprocessor
 
     def _extract_sparse_inducing_points(self, X, y, k_clusters):
-        """
-        Aplica K-Means para encontrar amostras representativas (Centroides reais),
-        evitando redundância e destruindo o gargalo O(n³).
-        """
-        # Se temos menos linhas que o limite, não precisamos de K-Means
         if len(X) <= k_clusters:
             return X, y
 
-        print(
-            f"[K-Means] Comprimindo {len(X)} amostras para {k_clusters} pontos indutores..."
-        )
+        print(f"  [K-Means] Comprimindo {len(X)} amostras para {k_clusters} pontos indutores...")
         kmeans = KMeans(n_clusters=k_clusters, random_state=42, n_init="auto")
         kmeans.fit(X)
 
-        # Encontra o índice da linha real mais próxima de cada centroide matemático
         indices, _ = pairwise_distances_argmin_min(kmeans.cluster_centers_, X)
+        return X[indices], y[indices]
 
-        return X[indices], y.iloc[indices].values
-
-    def run_pipeline(self, model_tag=MODEL_NAME):
-        """Orquestra o treinamento particionado por circuito."""
+    # =========================================================================
+    # ABORDAGEM 1: MODELO PARTICIONADO (LOCAL)
+    # =========================================================================
+    def run_partitioned_pipeline(self, model_tag):
+        print(f"\n{'=' * 50}")
+        print(f"🚀 INICIANDO ARQUITETURA 1: PARTICIONADO (POR CIRCUITO)")
+        print(f"{'=' * 50}")
+        
         circuitos = self.train_df["Circuit"].unique()
-        print(f"Encontrados {len(circuitos)} circuitos para particionamento.\n")
-
+        
         for circuito in circuitos:
-            print(f"{'=' * 50}")
-            print(f"TREINANDO CIRCUITO ID: {circuito}")
+            print(f"--- Treinando Circuito ID: {circuito} ---")
 
-            # 1. Isolar dados do circuito
             mask_train = self.train_df["Circuit"] == circuito
             mask_test = self.test_df["Circuit"] == circuito
 
-            train_circ = self.train_df[mask_train].copy()
-            test_circ = self.test_df[mask_test].copy()
+            X_train_circ = self.X_train[mask_train].copy()
+            X_test_circ = self.X_test[mask_test].copy()
+            y_train_circ = self.y_train[mask_train.values]
+            test_indices = self.test_df[mask_test].index
 
-            if len(test_circ) == 0:
-                print("Nenhum dado de teste para este circuito. Pulando predição...")
+            if len(X_test_circ) == 0:
                 continue
 
-            # 2. Separar Features (X) e Target (y), removendo a coluna 'Circuit'
-            X_train_raw = train_circ.drop(columns=[TARGET_COL, "Circuit"])
-            y_train_raw = train_circ[TARGET_COL]
+            # Remove a coluna Circuit pois a variância é zero localmente
+            X_train_circ.drop(columns=["Circuit"], errors="ignore", inplace=True)
+            X_test_circ.drop(columns=["Circuit"], errors="ignore", inplace=True)
 
-            X_test_raw = test_circ.drop(columns=[TARGET_COL, "Circuit"])
-            test_indices = (
-                test_circ.index
-            )  # Guarda os índices originais para reconstrução
+            preprocessor = self._build_preprocessor(X_train_circ, CATEGORICAL_COLS_BASE)
+            X_train_scaled = preprocessor.fit_transform(X_train_circ)
+            X_test_scaled = preprocessor.transform(X_test_circ)
 
-            # 3. Pré-processamento Anti-Leakage (Fit apenas no Treino!)
-            preprocessor = self._build_preprocessor(X_train_raw)
-            X_train_scaled = preprocessor.fit_transform(X_train_raw)
-            X_test_scaled = preprocessor.transform(X_test_raw)
-
-            num_features = X_train_scaled.shape[1]
-            print(f"Features após One-Hot Encoding: {num_features}")
-
-            # 4. K-Means: Extração de Pontos Indutores
             X_train_sparse, y_train_sparse = self._extract_sparse_inducing_points(
-                X_train_scaled, y_train_raw, k_clusters=MAX_INDUCING_POINTS
+                X_train_scaled, y_train_circ, k_clusters=MAX_INDUCING_POINTS_PARTITIONED
             )
 
-            # 5. Configuração do GridSearch e Kernels ARD
-            initial_length_scales = np.ones(num_features)
+            initial_length_scales = np.ones(X_train_scaled.shape[1])
             bounds = (1e-2, 1e4)
 
-            # Definimos as arquiteturas candidatas
-            # Otimizamos os limites do ruído branco para (1e-10, 1e1) para evitar o ConvergenceWarning
-            kernel_matern = ConstantKernel(1.0) * Matern(
-                length_scale=initial_length_scales, length_scale_bounds=bounds, nu=2.5
-            ) + WhiteKernel(noise_level=0.1, noise_level_bounds=(1e-10, 1e1))
-            kernel_rbf = ConstantKernel(1.0) * RBF(
-                length_scale=initial_length_scales, length_scale_bounds=bounds
-            ) + WhiteKernel(noise_level=0.1, noise_level_bounds=(1e-10, 1e1))
-            param_grid = {
-                "kernel": [kernel_matern, kernel_rbf],
-                "alpha": [1e-5, 1e-2],  # Diferentes níveis de jitter
-            }
+            kernel_matern = ConstantKernel(1.0) * Matern(length_scale=initial_length_scales, length_scale_bounds=bounds, nu=2.5) + WhiteKernel(noise_level=0.1, noise_level_bounds=(1e-10, 1e1))
+            kernel_rbf = ConstantKernel(1.0) * RBF(length_scale=initial_length_scales, length_scale_bounds=bounds) + WhiteKernel(noise_level=0.1, noise_level_bounds=(1e-10, 1e1))
+            
+            param_grid = {"kernel": [kernel_matern, kernel_rbf], "alpha": [1e-5, 1e-2]}
 
-            gpr_base = GaussianProcessRegressor(
-                n_restarts_optimizer=5, normalize_y=True, random_state=42
-            )
-
-            # CV=3 garante validação cruzada robusta no GridSearch
-            grid_search = GridSearchCV(
-                estimator=gpr_base,
-                param_grid=param_grid,
-                cv=3,
-                scoring="neg_mean_absolute_error",
-                n_jobs=-1,  # Usa todos os núcleos da CPU
-            )
-
-            # 6. Treinamento Otimizado
-            print("[GridSearch] Otimizando arquitetura e Hiperparâmetros L-BFGS-B...")
+            gpr_base = GaussianProcessRegressor(n_restarts_optimizer=5, normalize_y=True, random_state=42)
+            grid_search = GridSearchCV(estimator=gpr_base, param_grid=param_grid, cv=3, scoring="neg_mean_absolute_error", n_jobs=-1)
+            
             grid_search.fit(X_train_sparse, y_train_sparse)
 
             best_model = grid_search.best_estimator_
-            self.models[circuito] = best_model
+            self.models_part[circuito] = best_model
+            self.cv_scores_part[str(circuito)] = -grid_search.best_score_
+            self.best_params_part[str(circuito)] = {k: str(v) for k, v in grid_search.best_params_.items()}
 
-            print(f"Melhor MAE (CV): {-grid_search.best_score_:.3f}")
-            print(
-                f"LML Final: {best_model.log_marginal_likelihood(best_model.kernel_.theta):.2f}"
-            )
-
-            # 7. Inferência no conjunto de Teste do circuito
             y_pred, y_std = best_model.predict(X_test_scaled, return_std=True)
 
             for idx, pred, std in zip(test_indices, y_pred, y_std):
-                self.predictions.append(
-                    {"index": idx, "pred_quali_position": pred, "pred_std": std}
-                )
+                self.preds_part.append({"index": idx, "pred_quali_position": pred, "pred_std": std})
 
-        # 8. Reconstrução e Avaliação Global
-        return self._evaluate_global_performance(model_tag=model_tag)
+        return self._evaluate_performance(self.preds_part, model_tag, self.models_part, self.best_params_part, np.mean(list(self.cv_scores_part.values())))
 
-    def _evaluate_global_performance(self, model_tag=MODEL_NAME):
-        """Reconstroi as predições na ordem original e calcula métricas do ano de teste."""
+    # =========================================================================
+    # ABORDAGEM 2: MODELO GLOBAL (ÚNICO)
+    # =========================================================================
+    def run_global_pipeline(self, model_tag):
         print(f"\n{'=' * 50}")
-        print("AVALIAÇÃO GLOBAL (TESTE 2025)")
+        print(f"🚀 INICIANDO ARQUITETURA 2: GLOBAL (TODAS AS PISTAS JUNTAS)")
+        print(f"{'=' * 50}")
 
-        # Transforma predições em DataFrame e ordena pelo index original
-        preds_df = pd.DataFrame(self.predictions).set_index("index").sort_index()
+        X_train_global = self.X_train.copy()
+        X_test_global = self.X_test.copy()
+        y_train_global = self.y_train.copy()
+        test_indices = self.test_df.index
 
-        # Pega o alvo real (y_test) original e alinha os índices
+        # MANTÉM a coluna "Circuit" e passa ela para o One-Hot Encoding
+        cat_cols_global = CATEGORICAL_COLS_BASE + ["Circuit"]
+
+        preprocessor = self._build_preprocessor(X_train_global, cat_cols_global)
+        X_train_scaled = preprocessor.fit_transform(X_train_global)
+        X_test_scaled = preprocessor.transform(X_test_global)
+        
+        print(f"  Features globais após One-Hot Encoding: {X_train_scaled.shape[1]}")
+
+        X_train_sparse, y_train_sparse = self._extract_sparse_inducing_points(
+            X_train_scaled, y_train_global, k_clusters=MAX_INDUCING_POINTS_GLOBAL
+        )
+
+        initial_length_scales = np.ones(X_train_scaled.shape[1])
+        bounds = (1e-2, 1e4)
+
+        # Para o Global, priorizamos o Matern por ser melhor com ruído e quebras de estacionaridade
+        kernel_matern = ConstantKernel(1.0) * Matern(length_scale=initial_length_scales, length_scale_bounds=bounds, nu=2.5) + WhiteKernel(noise_level=0.1, noise_level_bounds=(1e-10, 1e1))
+        param_grid = {"kernel": [kernel_matern], "alpha": [1e-5, 1e-2]}
+
+        gpr_base = GaussianProcessRegressor(n_restarts_optimizer=5, normalize_y=True, random_state=42)
+        grid_search = GridSearchCV(estimator=gpr_base, param_grid=param_grid, cv=3, scoring="neg_mean_absolute_error", n_jobs=-1)
+        
+        print("  [GridSearch] Treinando modelo gigante... Isto pode demorar um pouco.")
+        grid_search.fit(X_train_sparse, y_train_sparse)
+
+        best_model = grid_search.best_estimator_
+        self.model_glob = best_model
+        self.cv_score_glob = -grid_search.best_score_
+        self.best_params_glob = {"GLOBAL_MODEL": {k: str(v) for k, v in grid_search.best_params_.items()}}
+
+        print(f"  Melhor MAE Global (CV): {self.cv_score_glob:.3f}")
+
+        y_pred, y_std = best_model.predict(X_test_scaled, return_std=True)
+
+        for idx, pred, std in zip(test_indices, y_pred, y_std):
+            self.preds_glob.append({"index": idx, "pred_quali_position": pred, "pred_std": std})
+
+        return self._evaluate_performance(self.preds_glob, model_tag, self.model_glob, self.best_params_glob, self.cv_score_glob)
+
+    # =========================================================================
+    # AVALIADOR COMUM
+    # =========================================================================
+    def _evaluate_performance(self, predictions_list, model_tag, model_obj, best_params, cv_mae):
+        preds_df = pd.DataFrame(predictions_list).set_index("index").sort_index()
+
         y_test_real = self.test_df[TARGET_COL].loc[preds_df.index]
         y_pred = preds_df["pred_quali_position"]
 
-        # Calcula as métricas
         rmse = np.sqrt(mean_squared_error(y_test_real, y_pred))
         mae = mean_absolute_error(y_test_real, y_pred)
         r2 = r2_score(y_test_real, y_pred)
         rho, pval = spearmanr(y_test_real, y_pred)
 
-        print(f"RMSE: {rmse:.3f}")
-        print(f"MAE:  {mae:.3f}")
-        print(f"R²:   {r2:.3f}")
-        print(f"Spearman rho: {rho:.4f} (p = {pval:.4e})")
-
-        # Salva resultados originais (floats)
         final_df = self.test_df.copy()
         final_df["pred_quali_position"] = preds_df["pred_quali_position"]
         final_df["pred_std"] = preds_df["pred_std"]
+        final_df["pred_quali_position_int"] = preds_df["pred_quali_position"].round().astype(int)
 
-        # Cria uma nova coluna com o valor arredondado para inteiro (int)
-        final_df["pred_quali_position_int"] = (
-            preds_df["pred_quali_position"].round().astype(int)
-        )
-
-        # 1. Calcula a diferença absoluta entre o previsto (arredondado) e o real
         erro_absoluto = abs(final_df["pred_quali_position_int"] - y_test_real)
-
-        # 2. Transforma em percentagens
-        acerto_exato = (erro_absoluto == 0).mean() * 100
         acerto_margem_1 = (erro_absoluto <= 1).mean() * 100
-        acerto_margem_2 = (erro_absoluto <= 2).mean() * 100
         acerto_margem_3 = (erro_absoluto <= 3).mean() * 100
 
-        print(f"\nMÉTRICAS PERCENTUAIS DE NEGÓCIO:")
-        print(f"Acerto Exato: {acerto_exato:.1f}%")
-        print(f"Acerto com Margem de ±1: {acerto_margem_1:.1f}% das previsões")
-        print(f"Acerto com Margem de ±2: {acerto_margem_2:.1f}% das previsões")
-        print(f"Acerto com Margem de ±3: {acerto_margem_3:.1f}% das previsões")
-
-        out_file = OUT_PREDS / f"{model_tag.lower()}_predictions_2025.csv"
+        out_file = OUT_PREDS / f"{model_tag.lower()}_predictions.csv"
         final_df.to_csv(out_file, index=False)
-        print(f"Predições completas salvas em: {out_file}")
+        
+        save_model(model_obj, model_tag, best_params=best_params, cv_mae=cv_mae)
 
-        # Result dict in the same shape as utils.eval.evaluate(), so
-        # run_all.py can aggregate this alongside the other models.
         return {
             "model": model_tag,
             "MAE": mae,
@@ -289,26 +250,51 @@ class F1GaussianProcessPipeline:
             "y_pred": y_pred.to_numpy(),
         }
 
+def print_comparison_table(res_part, res_glob):
+    """Gera um painel elegante no terminal comparando as duas arquiteturas."""
+    print("\n\n" + "█" * 60)
+    print(" 🏆 COMPARAÇÃO DE ARQUITETURAS GPR (ESTUDO DE ABLAÇÃO)")
+    print("█" * 60)
+    print(f"| {'Métrica':<15} | {'GPR Particionado (Local)':<25} | {'GPR Global (Único)':<15} |")
+    print(f"|{'-'*17}|{'-'*27}|{'-'*20}|")
+    
+    # Lógica para mostrar qual ganhou
+    mae_winner = "🏆" if res_part["MAE"] < res_glob["MAE"] else "   "
+    mae_winner_glob = "🏆" if res_glob["MAE"] < res_part["MAE"] else "   "
+    
+    r2_winner = "🏆" if res_part["R2"] > res_glob["R2"] else "   "
+    r2_winner_glob = "🏆" if res_glob["R2"] > res_part["R2"] else "   "
+    
+    print(f"| {'MAE (Erro)':<15} | {res_part['MAE']:<5.3f} posições {mae_winner:<11} | {res_glob['MAE']:<5.3f} posições {mae_winner_glob} |")
+    print(f"| {'RMSE':<15} | {res_part['RMSE']:<25.3f} | {res_glob['RMSE']:<15.3f} |")
+    print(f"| {'R² (Variância)':<15} | {res_part['R2']:<5.3f} {r2_winner:<19} | {res_glob['R2']:<5.3f} {r2_winner_glob:<8} |")
+    print(f"| {'Spearman Rho':<15} | {res_part['Spearman_rho']:<25.3f} | {res_glob['Spearman_rho']:<15.3f} |")
+    print(f"| {'Acurácia ±1':<15} | {res_part['Top1_acc']*100:<5.1f}% {'':<18} | {res_glob['Top1_acc']*100:<5.1f}% {'':<7} |")
+    print("█" * 60 + "\n")
+
 
 def main(ablation: str = "full"):
-    """
-    Parameters
-    ----------
-    ablation : str
-        Key into config.ABLATIONS. "full" (default) uses every
-        available feature. Any other key drops the extra columns
-        defined for that ablation before training.
-    """
     if ablation not in ABLATIONS:
-        raise ValueError(
-            f"Unknown ablation '{ablation}'. Available: {list(ABLATIONS.keys())}"
-        )
+        raise ValueError(f"Unknown ablation '{ablation}'. Available: {list(ABLATIONS.keys())}")
 
-    model_tag = MODEL_NAME if ablation == "full" else f"{MODEL_NAME}_{ablation}"
+    print(f"\n{'=' * 55}\n  {MODEL_NAME} ABLATION STUDY PIPELINE\n{'=' * 55}")
 
-    pipeline = F1GaussianProcessPipeline(extra_drop_cols=ABLATIONS[ablation])
-    return pipeline.run_pipeline(model_tag=model_tag)
+    X_train, X_test, y_train, y_test, train_df, test_df = load_and_split(extra_drop_cols=ABLATIONS[ablation])
+    pipeline = F1GaussianProcessPipeline(X_train, X_test, y_train, train_df, test_df)
 
+    # 1. Roda o Modelo Particionado
+    tag_part = f"{MODEL_NAME}_Partitioned" if ablation == "full" else f"{MODEL_NAME}_{ablation}_Partitioned"
+    res_part = pipeline.run_partitioned_pipeline(model_tag=tag_part)
+
+    # 2. Roda o Modelo Global
+    tag_glob = f"{MODEL_NAME}_Global" if ablation == "full" else f"{MODEL_NAME}_{ablation}_Global"
+    res_glob = pipeline.run_global_pipeline(model_tag=tag_glob)
+
+    # 3. Imprime a Tabela Comparativa no Terminal
+    print_comparison_table(res_part, res_glob)
+
+    # 4. Retornamos o res_part para o run_all.py, pois a arquitetura particionada é o nosso "baseline oficial" da equipa.
+    return res_part
 
 if __name__ == "__main__":
     main()

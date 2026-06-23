@@ -29,7 +29,7 @@ from config import (
     ENCODE_COLS,
     COMPOUND_COLS,
 )
-from circuit_metadata import get_circuit_metadata_df
+from .circuit_metadata import get_circuit_metadata_df
 
 
 def apply_feature_engineering(df):
