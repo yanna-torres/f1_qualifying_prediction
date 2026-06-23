@@ -12,7 +12,7 @@ Developed as part of a graduate-level machine learning course paper.
 |---|---|
 | Linear Regression | `sklearn.linear_model.LinearRegression` |
 | Support Vector Regression (SVR) | `sklearn.svm.SVR` |
-| Gradient Boosting | `xgboost` / `lightgbm` |
+| Gradient Boosting | `lightgbm` |
 | Multilayer Perceptron (MLP) | `sklearn.neural_network.MLPRegressor` |
 | Gaussian Process Regression (GPR) | `sklearn.gaussian_process.GaussianProcessRegressor` |
 
@@ -29,14 +29,14 @@ f1_qualifying_prediction/
 ├── README.md
 │
 ├── utils/
-│   ├── __init__.py   ← re-exports everything
-│   ├── data.py       ← load_and_split
-│   ├── eval.py       ← evaluate, save_results_table, save_enriched_predictions
-│   └── plot.py       ← all plot functions
+│   └── (helper functions)
 │
 ├── models/
-│   ├── mlp_f1_pipeline.py
-│   └── ...
+│   ├── lr_pipeline.py
+│   ├── svr_pipeline.py
+│   ├── gb_pipeline.py
+│   ├── mlp_pipeline.py
+│   └── gpr_pipeline.py
 │
 ├── data/
 └── outputs/
@@ -69,7 +69,13 @@ This runs each model pipeline in sequence, saves per-model predictions and figur
 ### Run a single model
 
 ```bash
-python models/mlp_f1_pipeline.py
+python models/mlp_pipeline.py
+```
+
+or
+
+```bash
+python run_all.py --mlp
 ```
 
 Each pipeline script is self-contained and can be run independently.
@@ -78,11 +84,13 @@ Each pipeline script is self-contained and can be run independently.
 
 ## Data
 
-The dataset `f1_v3_predictive.csv` covers the 2022–2024 Formula 1 seasons and includes qualifying session results, championship standings, circuit characteristics, driver history, and weather conditions. It is not included in the repository. Place the file at `data/f1_v3_predictive.csv` before running.
+The dataset is built from FastF1 timing data covering the 2022–2025 Formula 1 seasons (the ground-effect regulatory era). The raw wide-format dataset, `qualifying_dataset_wide_with_fp.csv`, is not included in the repository; place it at `data/qualifying_dataset_wide_with_fp.csv` before running `python data.py`.
 
-**Train / test split:** seasons 2022–2023 are used for training; the 2024 season is the held-out test set. This temporal split avoids data leakage and mirrors real-world deployment conditions.
+**Train / test split:** seasons 2022–2024 are used for training (1,355 observations); the 2025 season is held out entirely as the test set (476 observations). This temporal split avoids leakage from within-season correlation between races and mirrors real-world deployment conditions, where a model must predict a season it has not seen.
 
-**Features used (29):** qualifying session reached, best qualifying time, gap to pole position, driver and constructor championship standings, rolling performance metrics, circuit history features, weather variables, and target-encoded identifiers for driver, constructor, and circuit.
+**Avoiding target leakage:** any feature generated during or after the qualifying session itself (lap times, sector times, speed-trap measurements, tire state, and which sub-session a driver was eliminated in) is excluded, since these are functions of the very session that produces `GridPosition` and would not be available at the moment a real prediction needs to be made. See `purge_data_leakage()` in `data.py`.
+
+**Features used (22):** session identifiers (`year`, `Round`, `Circuit`, `Driver`, `Team`, label-encoded), ambient and track conditions (air/track temperature, humidity, pressure, wind speed, rainfall, wet flag), Free Practice performance expressed as a relative delta to the session's fastest lap (`FP1_s_Delta_pct`, `FP2_s_Delta_pct`, `FP3_s_Delta_pct`; see `apply_feature_engineering()`), a sprint-weekend flag, and six manually compiled circuit characteristics (`circuit_layout`, `circuit_speed`, `circuit_character`, `track_length_km`, `num_corners`, `elevation_change_m`; see `circuit_metadata.py`). Label encoding mappings for all categorical columns are saved to `data/label_encoders.json` for later decoding (e.g. when analysing saved prediction CSVs).
 
 ---
 
@@ -106,9 +114,9 @@ All models are evaluated on the same held-out test set using:
 All shared settings are defined in `config.py`:
 
 ```python
-TRAIN_SEASONS = [2022, 2023]
-TEST_SEASONS  = [2024]
-TARGET_COL    = "quali_position"
+TRAIN_SEASONS = [2022, 2023, 2024]
+TEST_SEASONS  = [2025]
+TARGET_COL    = "GridPosition"
 RANDOM_STATE  = 42
 ```
 
