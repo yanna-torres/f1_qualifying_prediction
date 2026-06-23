@@ -1,5 +1,5 @@
 """
-data.py
+utils/data.py
 =============
 Preprocessing, feature engineering (Label Encoding, Deltas), anti-leakage purges,
 and train/test split for the F1 qualifying dataset, using centralized configurations.
@@ -8,6 +8,7 @@ and train/test split for the F1 qualifying dataset, using centralized configurat
 import numpy as np
 import pandas as pd
 import os
+import json
 from sklearn.preprocessing import LabelEncoder
 
 import sys
@@ -28,7 +29,7 @@ from config import (
     ENCODE_COLS,
     COMPOUND_COLS,
 )
-from utils.circuit_metadata import get_circuit_metadata_df
+from circuit_metadata import get_circuit_metadata_df
 
 
 def apply_feature_engineering(df):
@@ -155,15 +156,26 @@ def preprocess_and_split(input_path=DATA_PATH_WIDE_WITH_FP):
     # through the same encoding as Driver/Team/Circuit, without
     # mutating the imported ENCODE_COLS constant.
     CIRCUIT_CATEGORICAL_COLS = ["circuit_layout", "circuit_speed", "circuit_character"]
-    le = LabelEncoder()
-    # Filter to ensure we only try to encode columns that survived the purge
     cols_to_encode = [
         c for c in ENCODE_COLS + CIRCUIT_CATEGORICAL_COLS if c in df.columns
     ]
+    encoder_mappings = {}
     for col in cols_to_encode:
+        col_encoder = LabelEncoder()
         df[col] = df[col].astype(str)
-        df[col] = le.fit_transform(df[col])
+        df[col] = col_encoder.fit_transform(df[col])
+        encoder_mappings[col] = {
+            str(i): label for i, label in enumerate(col_encoder.classes_)
+        }
         print(f"  [Encoder] Column '{col}' transformed into numeric values.")
+
+    # Save the integer -> original-label mapping for every encoded
+    # column, so saved prediction CSVs (which only contain the integer
+    # codes) can be decoded back to readable names later.
+    encoders_path = OUT_TRAIN.parent / "label_encoders.json"
+    with open(encoders_path, "w", encoding="utf-8") as f:
+        json.dump(encoder_mappings, f, ensure_ascii=False, indent=2)
+    print(f"  [Encoder] Saved label mappings -> {encoders_path}")
 
     # Apply shared Label Encoder to Compound columns
     existing_compounds = [c for c in COMPOUND_COLS if c in df.columns]

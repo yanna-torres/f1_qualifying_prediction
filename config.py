@@ -23,6 +23,8 @@ OUTPUT_DIR = ROOT / "outputs"
 OUT_PREDS = OUTPUT_DIR / "predictions"
 OUT_FIGS = OUTPUT_DIR / "figures"
 OUT_RESULTS = OUTPUT_DIR / "results_table.csv"
+OUT_PREDS = OUTPUT_DIR / "predictions"
+OUT_FIGS = OUTPUT_DIR / "figures"
 # ── Output CSV Paths (Train/Test Split) ───────────────────────────
 OUT_TRAIN = DATA_DIR / "qualifying_dataset_train.csv"
 OUT_TEST = DATA_DIR / "qualifying_dataset_test.csv"
