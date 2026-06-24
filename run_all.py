@@ -28,19 +28,19 @@ sys.path.insert(0, str(Path(__file__).parent / "models"))
 from utils import save_results_table, plot_model_comparison
 from config import ABLATIONS
 
-from models import lr_pipeline
-from models import mlp_pipeline
+# from models import lr_pipeline
+# from models import mlp_pipeline
 from models import gpr_pipeline
-from models import gb_pipeline
-from models import svr_pipeline
+# from models import gb_pipeline
+# from models import svr_pipeline
 
 # Maps CLI flag name -> pipeline module
 PIPELINE_REGISTRY = {
-    "lr": lr_pipeline,
-    "mlp": mlp_pipeline,
+    #"lr": lr_pipeline,
+    #"mlp": mlp_pipeline,
     "gpr": gpr_pipeline,
-    "gb": gb_pipeline,
-    "svr": svr_pipeline,
+    #"gb": gb_pipeline,
+    #"svr": svr_pipeline,
 }
 
 
