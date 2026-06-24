@@ -258,7 +258,6 @@ def print_comparison_table(res_part, res_glob):
     print(f"| {'Métrica':<15} | {'GPR Particionado (Local)':<25} | {'GPR Global (Único)':<15} |")
     print(f"|{'-'*17}|{'-'*27}|{'-'*20}|")
     
-    # Lógica para mostrar qual ganhou
     mae_winner = "🏆" if res_part["MAE"] < res_glob["MAE"] else "   "
     mae_winner_glob = "🏆" if res_glob["MAE"] < res_part["MAE"] else "   "
     
@@ -273,28 +272,50 @@ def print_comparison_table(res_part, res_glob):
     print("█" * 60 + "\n")
 
 
-def main(ablation: str = "full"):
+def main(ablation: str = "full", mode: str = "global"):
+    """
+    Parameters
+    ----------
+    ablation : str
+        Key into config.ABLATIONS. 
+    mode : str
+        Define o que executar:
+        - "global": Executa APENAS o modelo global vencedor (padrão oficial).
+        - "partitioned": Executa APENAS o modelo antigo dividido por pista.
+        - "compare": Executa ambos e imprime a tabela de comparação A/B.
+    """
     if ablation not in ABLATIONS:
         raise ValueError(f"Unknown ablation '{ablation}'. Available: {list(ABLATIONS.keys())}")
 
-    print(f"\n{'=' * 55}\n  {MODEL_NAME} ABLATION STUDY PIPELINE\n{'=' * 55}")
+    print(f"\n{'=' * 55}\n  {MODEL_NAME} PIPELINE (Mode: {mode.upper()})\n{'=' * 55}")
 
     X_train, X_test, y_train, y_test, train_df, test_df = load_and_split(extra_drop_cols=ABLATIONS[ablation])
     pipeline = F1GaussianProcessPipeline(X_train, X_test, y_train, train_df, test_df)
 
-    # 1. Roda o Modelo Particionado
-    tag_part = f"{MODEL_NAME}_Partitioned" if ablation == "full" else f"{MODEL_NAME}_{ablation}_Partitioned"
-    res_part = pipeline.run_partitioned_pipeline(model_tag=tag_part)
+    base_tag = MODEL_NAME if ablation == "full" else f"{MODEL_NAME}_{ablation}"
 
-    # 2. Roda o Modelo Global
-    tag_glob = f"{MODEL_NAME}_Global" if ablation == "full" else f"{MODEL_NAME}_{ablation}_Global"
-    res_glob = pipeline.run_global_pipeline(model_tag=tag_glob)
+    if mode == "compare":
+        tag_part = f"{base_tag}_Partitioned"
+        res_part = pipeline.run_partitioned_pipeline(model_tag=tag_part)
 
-    # 3. Imprime a Tabela Comparativa no Terminal
-    print_comparison_table(res_part, res_glob)
+        tag_glob = f"{base_tag}_Global"
+        res_glob = pipeline.run_global_pipeline(model_tag=tag_glob)
 
-    # 4. Retornamos o res_part para o run_all.py, pois a arquitetura particionada é o nosso "baseline oficial" da equipa.
-    return res_part
+        print_comparison_table(res_part, res_glob)
+        # Retornamos o modelo Global como vencedor para a tabela geral do run_all.py
+        return res_glob 
+
+    elif mode == "global":
+        # Uso oficial diário: Rápido e limpo
+        return pipeline.run_global_pipeline(model_tag=base_tag)
+
+    elif mode == "partitioned":
+        # Para testes específicos locais
+        return pipeline.run_partitioned_pipeline(model_tag=base_tag)
+        
+    else:
+        raise ValueError("O parâmetro 'mode' deve ser 'global', 'partitioned' ou 'compare'.")
 
 if __name__ == "__main__":
-    main()
+    # Para testar apenas um, mude aqui embaixo. Exemplo: main(mode="partitioned")
+    main(mode="global")
